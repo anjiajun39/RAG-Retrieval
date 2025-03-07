@@ -161,9 +161,6 @@ class Embedding(nn.Module):
         query_embeddings = F.normalize(query_embeddings, p=2, dim=-1)
         pos_doc_embeddings = F.normalize(pos_doc_embeddings, p=2, dim=-1)
 
-        query_embeddings = F.normalize(query_embeddings, p=2, dim=-1)
-        pos_doc_embeddings = F.normalize(pos_doc_embeddings, p=2, dim=-1)
-
         # [batch_size] <- [batch_size,dim],[batch_size,dim]
         sims = torch.einsum('bn, bn -> b', query_embeddings, pos_doc_embeddings)  # calculate every pair simlilarity score
 
