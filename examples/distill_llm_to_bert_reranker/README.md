@@ -1,6 +1,6 @@
 
 
-#通过下面的命令，将train_data_path的query和pos和neg中的doc，两两组成pair，通过训练好的llm模型(ckpt_path)预测标签为1的score，再输出到distill_train_data_path中。
+#通过下面的命令，将train_data_path的query和pos和neg中的doc，两两组成pair，得到训练好的llm模型(ckpt_path)预测标签为1的score，再输出到distill_train_data_path中。
 ```bash
 
 train_data_path="../../example_data/t2rank_100.jsonl"
