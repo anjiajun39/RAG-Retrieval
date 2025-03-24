@@ -14,19 +14,18 @@ max_label: 2
 min_label: 0
 max_len: 512
 shuffle_rate: 0.0
-train_group_size: 5 # Only work for pairwise or listwise loss
 train_label_key: "label"
 val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
 val_label_key: "label"
 
 ## Grouped Dataset
-# train_dataset: "/data_train/search/zengziyang/projects/RAG-Retrieval/example_data/grouped_reranker_eval_0221_q199_p1130_n975.jsonl"
+# train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
 # train_dataset_type: "grouped"
 # train_label_key: "gpt4o_listwise"
 # train_group_size: 10
 # shuffle_rate: 0.0
 # max_len: 128
-# val_dataset: "/data_train/search/zengziyang/projects/RAG-Retrieval/example_data/grouped_reranker_eval_0221_q199_p1130_n975.jsonl"
+# val_dataset: ../../../example_data/grouped_reranker_eval_data.jsonl"
 # val_dataset_type: "grouped"
 # val_label_key: "gpt4o_listwise"
 
