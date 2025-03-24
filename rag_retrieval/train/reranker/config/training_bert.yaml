@@ -1,5 +1,5 @@
 # Model
-model_name_or_path: "bge-reranker-m3-base"
+model_name_or_path: "BAAI/bge-reranker-v2-m3"
 model_type: "bert_encoder"
 num_labels: 1
 query_format: "{}"
@@ -7,25 +7,27 @@ document_format: "{}"
 
 
 ## Pointwise Dataset
-train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
-max_label: 2
-min_label: 0
-max_len: 512
-shuffle_rate: 0.0
-train_label_key: "label"
-val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
-val_label_key: "label"
+# train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
+# max_label: 2
+# min_label: 0
+# max_len: 512
+# shuffle_rate: 0.0
+# train_label_key: "label"
+# val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
+# val_label_key: "label"
+# loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 
 ## Grouped Dataset
-# train_dataset: "/data_train/search/zengziyang/projects/RAG-Retrieval/example_data/grouped_reranker_eval_0221_q199_p1130_n975.jsonl"
-# train_dataset_type: "grouped"
-# train_label_key: "gpt4o_listwise"
-# train_group_size: 10
-# shuffle_rate: 0.0
-# max_len: 128
-# val_dataset: "/data_train/search/zengziyang/projects/RAG-Retrieval/example_data/grouped_reranker_eval_0221_q199_p1130_n975.jsonl"
-# val_dataset_type: "grouped"
-# val_label_key: "gpt4o_listwise"
+train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
+train_dataset_type: "grouped"
+train_label_key: "listwise_score" # customized key: "pointwise_score" or "listwise_score"
+train_group_size: 10
+shuffle_rate: 0.0
+max_len: 512
+val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
+val_dataset_type: "grouped"
+val_label_key: "label"
+loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 
 
 # Training
@@ -36,10 +38,9 @@ save_on_epoch_end: 1
 num_max_checkpoints: 5
 
 ## Hyperparameters
-loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse" or "pairwise_ranknet" or "listwise_ce"
 epochs: 2
 lr: 5e-5
-batch_size: 96
+batch_size: 8
 seed: 42
 warmup_proportion: 0.1
 stable_proportion: 0.0

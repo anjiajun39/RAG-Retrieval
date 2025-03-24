@@ -5,6 +5,7 @@ from itertools import product
 
 def pointwise_mse(logits, labels):
     scores = torch.sigmoid(logits)
+    scores = scores.to(labels.dtype)
     return nn.MSELoss(reduction="mean")(scores, labels)
 
 

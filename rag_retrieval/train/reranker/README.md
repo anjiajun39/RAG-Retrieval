@@ -68,17 +68,9 @@ train_reranker.py \
 >./logs/training_bert.log &
 ```
 
-### Distillation of BERT-like models, fsdp(ddp)
-
-```bash
-CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
---config_file ../../../config/xlmroberta_default_config.yaml \
-train_reranker.py \
---config config/distilling_bert.yaml \
->./logs/distilling_bert.log &
 ```
 
-### LLM model, deepspeed(zero1-2, not for zero3)
+### Training of LLM-based model, deepspeed(zero1-2, not for zero3)
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/deepspeed/deepspeed_zero1.yaml \

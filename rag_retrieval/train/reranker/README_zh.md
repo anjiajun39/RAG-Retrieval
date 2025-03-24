@@ -64,7 +64,6 @@ val_label_key: "gpt4o_listwise"
 ## 训练
 
 #bert类模型训练, fsdp(ddp)
-
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/xlmroberta_default_config.yaml \
@@ -73,17 +72,7 @@ train_reranker.py \
 >./logs/training_bert.log &
 ```
 
-#bert类模型蒸馏, fsdp(ddp)
-
-```bash
-CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
---config_file ../../../config/xlmroberta_default_config.yaml \
-train_reranker.py \
---config config/distilling_bert.yaml \
->./logs/distilling_bert.log &
-```
-
-#llm model, deepspeed(zero1-2, not for zero3)
+#LLM类模型训练, deepspeed(zero1-2, not for zero3)
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/deepspeed/deepspeed_zero1.yaml \

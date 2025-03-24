@@ -39,7 +39,7 @@ class LLMDecoder(nn.Module):
         if labels is not None:
             logits = output.logits.squeeze()
             if self.loss_type == "pointwise_mse":
-                loss = ranking_loss.point_mse(logits, labels)
+                loss = ranking_loss.pointwise_mse(logits, labels)
             elif self.loss_type == "pointwise_bce":
                 loss = ranking_loss.pointwise_bce(logits, labels)
             elif self.loss_type == "pairwise_ranknet":

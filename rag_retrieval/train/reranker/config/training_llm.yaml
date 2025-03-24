@@ -9,25 +9,27 @@ special_token: "\nrelevance"
 
 
 ## Pointwise Dataset
-train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
-max_label: 2
-min_label: 0
-max_len: 512
-shuffle_rate: 0.0
-train_label_key: "label"
-val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
-val_label_key: "label"
+# train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
+# max_label: 2
+# min_label: 0
+# max_len: 512
+# shuffle_rate: 0.0
+# train_label_key: "label"
+# val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
+# val_label_key: "label"
+# loss_type: "pointwise_mse"  # "pointwise_bce" or "pointwise_mse"
 
 ## Grouped Dataset
-# train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
-# train_dataset_type: "grouped"
-# train_label_key: "gpt4o_listwise"
-# train_group_size: 10
-# shuffle_rate: 0.0
-# max_len: 128
-# val_dataset: ../../../example_data/grouped_reranker_eval_data.jsonl"
-# val_dataset_type: "grouped"
-# val_label_key: "gpt4o_listwise"
+train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
+train_dataset_type: "grouped"
+train_label_key: "listwise_score" # customized key: "pointwise_score" or "listwise_score"
+train_group_size: 10
+shuffle_rate: 0.0
+max_len: 512
+val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
+val_dataset_type: "grouped"
+val_label_key: "label"
+loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 
 
 # Training
@@ -38,7 +40,6 @@ save_on_epoch_end: 0
 num_max_checkpoints: 2
 
 ## Hyperparameters
-loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse" or "pairwise_ranknet" or "listwise_ce"
 epochs: 2
 lr: 1e-5
 batch_size: 2

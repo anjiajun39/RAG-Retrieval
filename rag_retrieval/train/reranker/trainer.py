@@ -70,7 +70,7 @@ class Trainer:
 
                     self.accelerator.backward(loss)
                     if batch_index % self.log_interval == 0:
-                        # 不适用于梯度分片的情况，如 ZeRO 2 和 ZeRO 3
+                        # 仅适用于 zero 0/1，不适用于 zero 2/3、FSDP 等梯度分片存储的情况
                         total_norm = torch.nn.utils.clip_grad_norm_(
                             self.model.parameters(), 
                             max_norm=float('inf'), # 设为无穷大以仅计算范数，不实际裁剪
