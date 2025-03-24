@@ -27,7 +27,7 @@ class Trainer:
         accelerator: Accelerator,
         validation_dataloader: DataLoader | None = None,
         epochs: int = 3,
-        lr_scheduler: LRScheduler | None = None,
+        lr_scheduler: LRScheduler,
         log_interval: int = 50,
         save_on_epoch_end: bool = True,
         tokenizer,
@@ -49,7 +49,7 @@ class Trainer:
             num_steps_per_epoch = len(self.train_dataloader)
         else:
             num_steps_per_epoch = None
-        self.progress_bar = DistributedTqdmProgressBar(self.epochs, num_steps_per_epoch=num_steps_per_epoch)
+        self.progress_bar = DistributedTqdmProgressBar(self.accelerator, self.epochs, num_steps_per_epoch=num_steps_per_epoch)
         self.current_step = 0
 
     def train(self):
@@ -66,8 +66,8 @@ class Trainer:
 
                     self.accelerator.backward(loss)
                     self.optimizer.step()
-                    if self.lr_scheduler is not None:
-                        self.lr_scheduler.step()
+                    
+                    self.lr_scheduler.step()
                     self.train_loss_tracker.update(loss)
 
                 self.progress_bar.update()
@@ -182,8 +182,8 @@ class DummyProgressBar:
 
 
 class DistributedTqdmProgressBar:
-    def __init__(self, epochs: int, num_steps_per_epoch: int | None, **kwargs) -> None:
-        self.accelerator = Accelerator()
+    def __init__(self, accelerator, epochs: int, num_steps_per_epoch: int | None, **kwargs) -> None:
+        self.accelerator = accelerator
         self.epochs = epochs
         self.current_epoch = 1
         self.num_steps_per_epoch = num_steps_per_epoch
