@@ -20,40 +20,48 @@ pip install -r requirements.txt
 
 在安装好依赖后，我们通过具体的示例来展示如何利用我们自己的数据来微调开源的排序模型 (BAAI/bge-reranker-v2-m3)，或者从 BERT 类模型 (hfl/chinese-roberta-wwm-ext) 以及 LLM 类模型 (Qwen/Qwen2.5-1.5B) 从零开始训练排序模型。与此同时，我们也支持将 LLM 类模型的排序能力蒸馏到较小的 BERT 模型中去。
 
-# 数据格式
+## 数据格式
 
-对于排序模型，我们支持如下的标准数据格式：
+我们支持如下的标准数据格式：
 ```
-{"query": str, "pos": List[str], "neg":List[str], "pos_scores": List, "neg_scores": List}
+{"query": str, "hits": [{"content": xxx, "label_1": xxx, "label_2": xxx}, ...]}
 ```
-- `pos` 为 query 下所有的正样本。(当蒸馏或者训练数据是多级标签时，也可以是正负样本)
-- `neg` 为 query 下所有的负样本。
-- `pos_scores` 为 query 下所有正样本对应的得分。(当蒸馏或者数据是多级标签时，也可以是正负样本的得分)
-- `neg_scores` 为 query 下所有负样本对应的得分。
+- `hits` 为 query 下所有的文档样本，`content` 是文档实际内容。
+- `label_1/2/...` 表示通过人工标注或教师模型打分所分配的相关性标签，作为模型微调的监督信号。
 
 
-对于排序模型，支持以下几种数据进行微调：
+## 数据加载
 
-- 二分类数据：当标注数据中query和doc的相关性为二分类数据，即 label 只存在 0 和 1 时，可参考 [t2rank_100.jsonl](../../../example_data/t2rank_100.jsonl) 文件。
-```
-{"query": str, "pos": List[str], "neg":List[str]}
-```
-对于这种数据，在训练中，我们采用二分类交叉熵损失 `Binary Cross Entropy`来进行训练。在默认情况下，我们会把 query 和正例组成 pair，分数为 1；query 和负例组成 pair，分数为 0。在预测时，模型最终的预测分数为模型输出的 logit，后续可以经过 sigmoid 归一化为 0-1 区间。
+我们提供两种数据加载方式用于支持不同类型的损失函数：
 
-- 多级标签数据：当标注数据中query和doc的相关性为多分类数据，即 label 为多级标签，（可能等于 0,1,2 等）,用户可以在pos_scores中指定相关性的级别。此时数据集内部会自动将离散的 label 均匀放缩到 0-1 分数区间中。例如数据集中存在三级标签（0，1，2），那么 label 0: 0，label 1: 0.5，label 2: 1
-```
-{"query": str, "pos": List[str], "pos_scores": List[int|float]}
-```
-对于这种数据，用户在设置数据集参数的时候需要手动指定 max label 和 min label（初始条件下 max label 默认为 1，min label 默认为 0）。在训练中，我们采用均方损失 `MSE` 或者soft label 下的二分类交叉熵损失 `Binary Cross Entropy`来进行训练。
+**单点数据加载**，支持均方损失 `MSE` 和二分类交叉熵损失 `Binary Cross Entropy`，目标优化单点 query-content 的绝对相关性判断。需要手动指明数据集中所使用的相关性标签： `train_label_key` 和 `val_label_key`。当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。例如数据集中存在三级标签（0，1，2），经过放缩后，得到{ label 0: 0，label 1: 0.5，label 2: 1}。在预测时，模型最终的预测分数为模型输出的 logit，后续可以经过 sigmoid 归一化为 0-1 区间。用户可以利用 LLM 来得到相关性标签以进行蒸馏，在 [examples/distill_llm_to_bert](../../../examples/distill_llm_to_bert) 目录下可以找到用 LLM 进行相关性打分标注的代码。
 
-- 蒸馏数据：用户可以直接使用 `pos`（同时包含正样本和负样本）和 `pos_scores` 来构建数据集(`pos_scores` 为范围 0-1 的连续分数)，可参考 [t2rank_100.distill.standard.jsonl](../../../example_data/t2rank_100.distill.standard.jsonl) 文件。
+``` 
+train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
+max_label: 2
+min_label: 0
+max_len: 512
+shuffle_rate: 0.0
+train_label_key: "label"
+val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
+val_label_key: "label"
 ```
-{"query": str, "pos": List[str], "pos_scores": List[int|float]}
+
+**分组数据加载**，支持成对损失 `Pairwise RankNet Loss` 和交叉熵损失 `Listwise Cross Entropy`，目标优化 query-list[content] 的相对相关性判断。`train_group_size` 设定针对每个 query，需要同时考虑多少个文档的相对相关，并且如果原始文档数目数量不足，会进行重复采样。`train_label_key` 和 `val_label_key` 指明有监督信号的来源，可以是人工标注，也可以是用高级语言模型进行的 listwise 排序。
+
 ```
-对于这种数据,在训练中，我们采用均方损失 `MSE` 或者soft label 下的二分类交叉熵损失 `Binary Cross Entropy`来进行训练。在 [examples/distill_llm_to_bert](../../../examples/distill_llm_to_bert) 目录下可以找到用 LLM 进行相关性打分标注的代码。
+train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
+train_dataset_type: "grouped"
+train_label_key: "gpt4o_listwise"
+train_group_size: 10
+shuffle_rate: 0.0
+max_len: 128
+val_dataset: ../../../example_data/grouped_reranker_eval_data.jsonl"
+val_dataset_type: "grouped"
+val_label_key: "gpt4o_listwise"
+```
 
-
-# 训练
+## 训练
 
 #bert类模型训练, fsdp(ddp)
 
@@ -84,7 +92,7 @@ train_reranker.py \
 >./logs/training_llm_deepspeed1.log &
 ```
 
-**参数解释**
+## **参数解释**
 
 多卡训练config_file:
 
@@ -108,7 +116,7 @@ train_reranker.py \
 
 数据集方面：
 - `train_dataset`：训练数据集，格式见上文
-- `val_dataset`：验证数据集，格式同训练集(如果没有，设置为空即可)
+- `val_dataset`：验证数据集，格式同训练集(如果没有，设置为 None 即可)
 - `max_label`：数据集中的最大 label，默认为 1
 - `min_label`：数据集中的最小 label，默认为 0
 
@@ -120,11 +128,12 @@ train_reranker.py \
 - `batch_size`：每个 batch 中 query-doc pair 对的数量
 - `seed`：设置统一种子，用于实验结果的复现
 - `warmup_proportion`：学习率预热步数占模型更新总步数的比例，如果设置为 0，那么不进行学习率预热，直接从设置的 `lr` 进行余弦衰退
+- `stable_proportion`：学习率稳定不变的步数占模型更新总步数的比例，默认是 0
 - `gradient_accumulation_steps`：梯度累积步数，模型实际的 batch_size 大小等于 `batch_size` * `gradient_accumulation_steps` * `num_of_GPUs`
 - `mixed_precision`：是否进行混合精度的训练，以降低显存的需求。混合精度训练通过在计算使用低精度，更新参数用高精度，来优化显存占用。并且 bf16（Brain Floating Point 16）可以有效降低 loss scaling 的异常情况，但该类型仅被部分硬件支持
 - `save_on_epoch_end`：是否在每一个 epoch 结束后都保存模型
 - `num_max_checkpoints`：控制单次训练下保存的最多 checkpoints 数目
-- `log_interval`：模型每更新 x 次参数记录一次 loss
+- `log_interval`：模型每**更新** x 次参数记录一次 loss
 - `log_with`：可视化工具，从 wandb 和 tensorboard 中选择
 
 模型参数：
@@ -173,8 +182,8 @@ reranker = LLMDecoder.from_pretrained(
     num_labels=1,  # binary classification
     query_format="query: {}",
     document_format="document: {}",
-    seq=" ",
-    special_token="</s>",
+    seq="\n",
+    special_token="\nrelevance",
 )
 reranker.model.to("cuda:0")
 reranker.eval()

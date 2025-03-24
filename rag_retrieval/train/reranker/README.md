@@ -1,59 +1,64 @@
-[English](./README.md) | [中文](./README_zh.md)
-
-# Setting Up the Environment
+# Installation Environment
 
 ```bash
 conda create -n rag-retrieval python=3.8 && conda activate rag-retrieval
-# To avoid compatibility issues between automatically installed torch and local CUDA, it is recommended to manually install a torch version compatible with your local CUDA before proceeding to the next step.
+# To avoid incompatibility between the automatically installed torch and the local cuda, it is recommended to manually install a torch compatible with the local cuda version before proceeding to the next step.
 pip install -r requirements.txt 
 ```
 
 | Requirement | Recommend |
-|---------------|-----------------|
-| accelerate    | 1.0.1           |
-| deepspeed     | 0.15.4          |
-| transformers  | 4.44.2          |
+| ---------------| ---------------- |
+| accelerate    |             1.0.1 |
+| deepspeed | 0.15.4|
+| transformers | 4.44.2|          
 
 # Fine-tuning the Model
 
-After installing the dependencies, we will demonstrate how to fine-tune the open-source ranking model (BAAI/bge-reranker-v2-m3) using our own data, or train a ranking model from scratch using BERT-like models (hfl/chinese-roberta-wwm-ext) and LLM-like models (Qwen/Qwen2.5-1.5B). Additionally, we support distilling the ranking capabilities of LLM-like models into smaller BERT models.
+After installing the dependencies, we will demonstrate through specific examples how to use our own data to fine-tune the open-source ranking model (BAAI/bge-reranker-v2-m3), or train a ranking model from scratch using BERT-like models (hfl/chinese-roberta-wwm-ext) and LLM-like models (Qwen/Qwen2.5-1.5B). At the same time, we also support distilling the ranking ability of LLM-like models into smaller BERT models.
 
-# Data Format
+## Data Format
 
-For ranking models, we support the following standard data format:
+We support the following standard data format:
 ```
-{"query": str, "pos": List[str], "neg":List[str], "pos_scores": List, "neg_scores": List}
+{"query": str, "hits": [{"content": xxx, "label_1": xxx, "label_2": xxx}, ...]}
 ```
-- `pos` contains all positive samples for the query.(When distillation or training data is multi-level label, it can also be positive and negative samples)
-- `neg` contains all negative samples for the query.
-- `pos_scores` contains the scores corresponding to all positive sample documents for the query.(When distillation or data is multi-level label, it can also be the scores of positive and negative samples)
-- `neg_scores` contains the scores corresponding to all negative sample documents for the query.
+- `hits` represents all document samples under the query, and `content` is the actual content of the document.
+- `label_1/2/...` represents the relevance labels assigned through manual annotation or scoring by a teacher model, serving as the supervision signal for model fine-tuning.
 
-For the reranker tasks, the following types of data are supported for fine-tuning:
+## Data Loading
 
-- Binary label data: When the relevance between query and doc in the labeled data is binary data, that is, label only exists in 0 and 1, you  refer to the [t2rank_100.jsonl](../../../example_data/t2rank_100.jsonl) file.
+We provide two data loading methods to support different types of loss functions:
+
+**Single-point Data Loading** supports Mean Squared Error (`MSE`) and Binary Cross Entropy loss, aiming to optimize the absolute relevance judgment of a single query-content point. You need to manually specify the relevance labels used in the dataset: `train_label_key` and `val_label_key`. When the relevance is a multi-level label, by setting `max_label` and `min_label`, the dataset will automatically scale the multi-level labels uniformly to the 0-1 score interval. For example, if there are three-level labels (0, 1, 2) in the dataset, after scaling, we get { label 0: 0, label 1: 0.5, label 2: 1}. During prediction, the final prediction score of the model is the logit output by the model, which can be normalized to the 0-1 interval using the sigmoid function later. Users can use an LLM to obtain relevance labels for distillation. You can find the code for using an LLM to score and annotate relevance in the [examples/distill_llm_to_bert](../../../examples/distill_llm_to_bert) directory.
+
+``` 
+train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
+max_label: 2
+min_label: 0
+max_len: 512
+shuffle_rate: 0.0
+train_label_key: "label"
+val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
+val_label_key: "label"
 ```
-{"query": str, "pos": List[str], "neg": List[str]}
+
+**Grouped Data Loading** supports Pairwise RankNet Loss and Listwise Cross Entropy loss, aiming to optimize the relative relevance judgment of query-list[content]. `train_group_size` sets how many documents' relative relevance need to be considered simultaneously for each query, and if the number of original documents is insufficient, repeated sampling will be performed. `train_label_key` and `val_label_key` specify the source of the supervised signal, which can be manual annotation or listwise ranking using an advanced language model.
+
 ```
-For this kind of data, we use `Binary Cross Entropy` for training. By default, we pair query and positive example with a score of 1; query and negative example with a score of 0. When predicting, the final prediction score of the model is the logit output by the model, which can be normalized to the range of 0-1 through sigmoid.
-
-- Multi-level label data: When the relevance between query and doc in the labeled data is multi-level data, that is, the label is a multi-level label (may be equal to 0, 1, 2, etc.), the user can specify the level of relevance in pos_scores. At this time, the data set will automatically scale the discrete labels evenly to the 0-1 score range. For example, if there are three levels of labels (0, 1, 2) in the data set, then label 0: 0, label 1: 0.5, label 2: 1
+train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
+train_dataset_type: "grouped"
+train_label_key: "gpt4o_listwise"
+train_group_size: 10
+shuffle_rate: 0.0
+max_len: 128
+val_dataset: ../../../example_data/grouped_reranker_eval_data.jsonl"
+val_dataset_type: "grouped"
+val_label_key: "gpt4o_listwise"
 ```
-{"query": str, "pos": List[str], "pos_scores": List[int|float]}
-```
-For this kind of data, users need to manually specify the max label and min label when setting the dataset parameters (the default value of max label is 1 and min label is 0 ). In training, we use  `MSE` or `Binary Cross Entropy` in the soft label for training.
 
-- Distillation data: Users can directly use `pos` (including both positive and negative samples) and `pos_scores` to construct a dataset (`pos_scores` is a continuous score ranging from 0-1), please refer to the [t2rank_100.distill.standard.jsonl](../../../example_data/t2rank_100.distill.standard.jsonl) file.
-```
-{"query": str, "pos": List[str], "pos_scores": List[int|float]}
-```
-For this kind of data, we use mean square loss `MSE` or binary cross entropy loss `Binary Cross Entropy` in the soft label for training. You can find the code for using LLM for relevance scoring in the [examples/distill_llm_to_bert](../../../examples/distill_llm_to_bert) directory.
+## Training
 
-
-
-# Training
-
-## Training BERT-like Models, fsdp(ddp)
+### Training of BERT-like models, fsdp(ddp)
 
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
@@ -63,7 +68,7 @@ train_reranker.py \
 >./logs/training_bert.log &
 ```
 
-## Distilling BERT-like Models, fsdp(ddp)
+### Distillation of BERT-like models, fsdp(ddp)
 
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
@@ -73,8 +78,7 @@ train_reranker.py \
 >./logs/distilling_bert.log &
 ```
 
-## Training LLM Models, deepspeed(zero1-2, not for zero3)
-
+### LLM model, deepspeed(zero1-2, not for zero3)
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/deepspeed/deepspeed_zero1.yaml \
@@ -83,62 +87,63 @@ train_reranker.py \
 >./logs/training_llm_deepspeed1.log &
 ```
 
-**Parameter Explanation**
+### Parameter Explanation
 
-Multi-gpu training config_file:
-- For BERT-like models, fsdp is used by default to support multi-GPU training. Here are examples of configuration files:
-  - [default_fsdp](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/default_fsdp.yaml): Use this configuration file for training a ranking model from scratch based on hfl/chinese-roberta-wwm-ext.
-  - [xlmroberta_default_config](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/xlmroberta_default_config.yaml): Use this configuration file for fine-tuning based on BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1, or BAAI/bge-reranker-v2-m3, as they are all trained based on the multilingual XLMRoberta.
+Configuration file for multi-GPU training:
 
-- For LLM-like models, it is recommended to use deepspeed to support multi-GPU training. Currently, only the training stages of zero1 and zero2 are supported. Below are examples of configuration files.
+- For BERT-like models, fsdp is used by default to support multi-GPU training. Here is an example of the configuration file.
+  - [default_fsdp](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/default_fsdp.yaml): If you want to train a ranking model from scratch based on hfl/chinese-roberta-wwm-ext, use this configuration file.
+  - [xlmroberta_default_config](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/xlmroberta_default_config.yaml): If you want to fine-tune on the basis of BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1, BAAI/bge-reranker-v2-m3, use this configuration file, as they are all trained based on the multilingual XLMRoberta.
+
+- For LLM-like models, it is recommended to use deepspeed to support multi-GPU training. Currently, only zero1 and zero2 are supported during the training phase. Here are examples of the configuration files.
   - [deepspeed_zero1](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/deepspeed/deepspeed_zero1.yaml)
   - [deepspeed_zero2](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/deepspeed/deepspeed_zero2.yaml)
 
-- Modifications for multi-GPU training configuration:
-  - Change `CUDA_VISIBLE_DEVICES="0"` in the command
-  - Modify the `num_processes` in the aforementioned configuration files to the number of GPUs you want to use.
-
+- Modification of the multi-GPU training configuration file:
+  - Modify the CUDA_VISIBLE_DEVICES="0" in the command to the multi-GPUs you want to set.
+  - Modify the `num_processes` in the above-mentioned configuration file to the number of GPUs you want to run.
 
 Model-related:
-- `model_name_or_path`: The name of the open-source reranker model or the local server location where it is downloaded. Examples: BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1. Training from scratch is also possible, such as using BERT: hfl/chinese-roberta-wwm-ext and LLM: Qwen/Qwen2.5-1.5B.
-- `model_type`: Currently supports bert_encoder or llm_decoder class models.
-- `max_len`: The maximum input length supported by the model.
+- `model_name_or_path`: The name of the open-source reranker model or the location on the local server where it is downloaded. For example: BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1. You can also train from scratch, such as BERT: hfl/chinese-roberta-wwm-ext and LLM: Qwen/Qwen2.5-1.5B.
+- `model_type`: Currently, bert_encoder or llm_decoder type models are supported.
+- `max_len`: The maximum input length supported by the data.
 
 Dataset-related:
-- `train_dataset`: The training dataset, format as described above.
-- `val_dataset`: The validation dataset, same format as the training dataset.(If not, just set it to empty)
-- `max_label`: The maximum label in the dataset, default is 1.
-- `min_label`: The minimum label in the dataset, default is 0.
+- `train_dataset`: The training dataset, with the format described above.
+- `val_dataset`: The validation dataset, with the same format as the training dataset (if there is none, set it to None).
+- `max_label`: The maximum label in the dataset, with a default value of 1.
+- `min_label`: The minimum label in the dataset, with a default value of 0.
 
 Training-related:
-- `output_dir`: Directory for saving checkpoints and the final model during training.
-- `loss_type`: Choose from point_ce (cross-entropy loss) and point_mse (mean squared error loss).
-- `epoch`: Number of epochs to train the model on the dataset.
-- `lr`: Learning rate, typically between 1e-5 and 5e-5.
-- `batch_size`: Number of query-doc pairs in each batch.
-- `seed`: Set a consistent seed for reproducibility of experimental results.
-- `warmup_proportion`: Proportion of warmup steps to total model update steps. If set to 0, no warmup is performed, and cosine decay is applied directly from the set `lr`.
-- `gradient_accumulation_steps`: Number of gradient accumulation steps. The actual batch size is `batch_size` * `gradient_accumulation_steps` * `num_of_GPUs`.
-- `mixed_precision`: Whether to use mixed precision training to reduce GPU memory requirements. Mixed precision training optimizes memory usage by using low precision for computations and high precision for parameter updates. bf16 (Brain Floating Point 16) can effectively reduce anomalies in loss scaling but is only supported by some hardware.
+- `output_dir`: The directory for saving the checkpoints during training and the final model.
+- `loss_type`: Choose from point_ce (Cross Entropy Loss) and point_mse (Mean Squared Error Loss).
+- `epoch`: The number of epochs the model is trained on the training dataset.
+- `lr`: The learning rate, generally between 1e-5 and 5e-5.
+- `batch_size`: The number of query-doc pairs in each batch.
+- `seed`: Set a unified seed for reproducibility of experimental results.
+- `warmup_proportion`: The proportion of the number of learning rate warm-up steps to the total number of model update steps. If set to 0, no learning rate warm-up will be performed, and the cosine annealing will start directly from the set `lr`.
+- `stable_proportion`: The proportion of the number of steps where the learning rate remains stable to the total number of model update steps, with a default value of 0.
+- `gradient_accumulation_steps`: The number of gradient accumulation steps. The actual batch_size of the model is equal to `batch_size` * `gradient_accumulation_steps` * `num_of_GPUs`.
+- `mixed_precision`: Whether to perform mixed-precision training to reduce the memory requirement. Mixed-precision training optimizes memory usage by using low precision for calculations and high precision for parameter updates. And bf16 (Brain Floating Point 16) can effectively reduce abnormal situations of loss scaling, but this type is only supported by some hardware.
 - `save_on_epoch_end`: Whether to save the model at the end of each epoch.
-- `num_max_checkpoints`: Controls the maximum number of checkpoints saved during a single training session.
-- `log_interval`: Log loss every x parameter updates.
-- `log_with`: Visualization tool, choose from wandb and tensorboard.
+- `num_max_checkpoints`: Control the maximum number of checkpoints saved in a single training session.
+- `log_interval`: The model records the loss every x parameter updates.
+- `log_with`: Visualization tools, choose from wandb and tensorboard.
 
-Model Parameters:
-- `num_labels`: Number of logits output by the model, corresponding to the number of classification categories.
-- For LLM used in discriminative ranking, the input format needs to be manually constructed, introducing the following parameters:
-  - `query_format`, e.g., "query: {}"
-  - `document_format`, e.g., "document: {}"
-  - `seq`: Separates the query and document parts, e.g., " "
-  - `special_token`: Indicates the end of the document content, prompting the model to start scoring. It can be any token, e.g., "\</s>"
-  - Overall format: "query: xxx document: xxx\</s>"
+Model parameters:
+- `num_labels`: The number of logits output by the model, that is, the number of classification categories of the model.
+- When an LLM is used for discriminative ranking scoring, the input format needs to be manually constructed, introducing the following parameters:
+  - `query_format`, e.g. "query: {}"
+  - `document_format`, e.g. "document: {}" 
+  - `seq`: Separate the query and document parts, e.g. " "
+  - `special_token`: Indicate the end of the document content and guide the model to start scoring. Theoretically, it can be any token, e.g. "\</s>" 
+  - The overall format is: "query: xxx document: xxx\</s>" 
 
 # Loading the Model for Prediction
 
-For saved models, you can easily load them for prediction. 
+For the saved model, you can easily load the model for prediction.
 
-Cross-Encoder Models（BERT-like）
+Cross-Encoder model (BERT-like)
 ```python
 ckpt_path = "./bge-reranker-m3-base"
 reranker = CrossEncoder.from_pretrained(
@@ -149,8 +154,8 @@ reranker.model.to("cuda:0")
 reranker.eval()
 
 input_lst = [
-    ["I love China", "I love China"],
-    ["I love the USA", "I don't like the USA at all"],
+    ["我喜欢中国", "我喜欢中国"],
+    ["我喜欢美国", "我一点都不喜欢美国"]
 ]
 
 res = reranker.compute_score(input_lst)
@@ -158,10 +163,10 @@ res = reranker.compute_score(input_lst)
 print(torch.sigmoid(res[0]))
 print(torch.sigmoid(res[1]))
 ```
-LLM-Decoder Models （MLP-based scalar mapping）
-> To accommodate special cases of LLMs, such as "Qwen/Qwen2.5-1.5B," for discriminative ranking, a relevant format has been designed. The practical effect is: "query: {xxx} document: {xxx}\</s>". 
-> 
-> Experiments show that the introduction of `</s>` significantly enhances the ranking performance of LLMs [cited from https://arxiv.org/abs/2411.04539 section 4.3].
+
+LLM-Decoder model (Scalar mapping based on MLP)
+
+> To meet the special case of using an LLM such as "Qwen/Qwen2.5-1.5B" for discriminative ranking, a relevant format has been designed. The actual effect is: "query: {xxx} document: {xxx}\</s>". Experiments have shown that the introduction of \</s> significantly improves the ranking performance of the LLM [from https://arxiv.org/abs/2411.04539 section 4.3].
 
 ```python
 ckpt_path = "./Qwen2-1.5B-Instruct"
@@ -170,15 +175,15 @@ reranker = LLMDecoder.from_pretrained(
     num_labels=1,  # binary classification
     query_format="query: {}",
     document_format="document: {}",
-    seq=" ",
-    special_token="</s>",
+    seq="\n",
+    special_token="\nrelevance",
 )
 reranker.model.to("cuda:0")
 reranker.eval()
 
 input_lst = [
-    ["I love China", "I love China"],
-    ["I love the USA", "I don't like the USA at all"],
+    ["我喜欢中国", "我喜欢中国"],
+    ["我喜欢美国", "我一点都不喜欢美国"],
 ]
 
 res = reranker.compute_score(input_lst)
