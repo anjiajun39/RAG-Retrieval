@@ -14,21 +14,22 @@ if __name__ == "__main__":
     model_cache_dir = ""
     model_dir = ""
 
-    data_set_name = "fineweb_edu"  # squad_v2, fineweb_edu
+    data_set_name = "squad_v2"  # squad_v2, fineweb_edu
     all_models = [
-        "jinaai/jina-embeddings-v2-base-en",
-        "jinaai/jina-embeddings-v3",
-        "BAAI/bge-m3",
-        "NovaSearch/jasper_en_vision_language_v1",
-        "nvidia/NV-Embed-v2",
-        "Alibaba-NLP/gte-Qwen2-7B-instruct",
-        "api_voyage",
-        "api_openai"
+        # "jinaai/jina-embeddings-v2-base-en",
+        # "jinaai/jina-embeddings-v3",
+        # "BAAI/bge-m3",
+        # "NovaSearch/jasper_en_vision_language_v1",
+        # "nvidia/NV-Embed-v2",
+        # "Alibaba-NLP/gte-Qwen2-7B-instruct",
+        # "api_voyage",
+        # "api_openai"
+        "infgrad/very_awesome",
     ]
 
     max_data = 10000
-    # min_len, max_len = 100, 512 # squad_v2
-    min_len, max_len = 200, 500  # fineweb_edu
+    min_len, max_len = 100, 512 # squad_v2
+    # min_len, max_len = 200, 500  # fineweb_edu
     batch_size = 12
 
     # load and process data
@@ -100,9 +101,21 @@ if __name__ == "__main__":
     for model_name_or_path in all_models:
         # load model
         if "api" not in model_name_or_path:
-            model = SentenceTransformer(
-                model_dir + model_name_or_path, trust_remote_code=True
-            )
+            import torch
+            if "infgrad/very_awesome" in model_name_or_path:
+                model = SentenceTransformer(
+                    model_dir +  model_name_or_path,
+                    trust_remote_code=True,
+                    model_kwargs={
+                        "torch_dtype": torch.bfloat16,  # fp16 容易计算出nan
+                        "attn_implementation": "flash_attention_2"
+                    },
+                    config_kwargs={"single_vector_type": "cls_add_mean"} # mean, cls, cls_add_mean
+                ).cuda().bfloat16().eval()
+            else:
+                model = SentenceTransformer(
+                    model_dir +  model_name_or_path, trust_remote_code=True, cache_folder=model_cache_dir
+                )
         else:
             model = None
         print(model_name_or_path)
@@ -254,6 +267,34 @@ if __name__ == "__main__":
             )
             after_text_vecs = model.encode(
                 after_text_list,
+                show_progress_bar=True,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+            )
+        elif "infgrad/very_awesome" in model_name_or_path:
+            model.max_seq_length = 32 * 1024
+            # RETRIEVE_Q_PROMPT = "<|START_INSTRUCTION|>Answer the question<|END_INSTRUCTION|>"
+            RETRIEVE_P_PROMPT = "<|START_INSTRUCTION|>Candidate document<|END_INSTRUCTION|>"
+            full_text_vecs = model.encode(
+                [f"{RETRIEVE_P_PROMPT}{p}" for p in text_list],
+                show_progress_bar=True,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+            )
+            before_text_vecs = model.encode(
+                [f"{RETRIEVE_P_PROMPT}{p}" for p in before_text_list],
+                show_progress_bar=True,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+            )
+            middle_text_vecs = model.encode(
+                [f"{RETRIEVE_P_PROMPT}{p}" for p in middle_text_list],
+                show_progress_bar=True,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+            )
+            after_text_vecs = model.encode(
+                [f"{RETRIEVE_P_PROMPT}{p}" for p in after_text_list],
                 show_progress_bar=True,
                 batch_size=batch_size,
                 normalize_embeddings=True,
