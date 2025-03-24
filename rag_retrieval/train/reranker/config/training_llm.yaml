@@ -10,12 +10,14 @@ special_token: "\nrelevance"
 
 ## Pointwise Dataset
 # train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
+# train_dataset_type: "pointwise"
 # max_label: 2
 # min_label: 0
 # max_len: 512
 # shuffle_rate: 0.0
 # train_label_key: "label"
 # val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
+# val_dataset_type: "pointwise"
 # val_label_key: "label"
 # loss_type: "pointwise_mse"  # "pointwise_bce" or "pointwise_mse"
 

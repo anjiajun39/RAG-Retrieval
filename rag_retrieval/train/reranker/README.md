@@ -1,141 +1,151 @@
-# Installation Environment
+[English | [中文](README_zh.md)]
+# Environment Setup
 
 ```bash
 conda create -n rag-retrieval python=3.8 && conda activate rag-retrieval
-# To avoid incompatibility between the automatically installed torch and the local cuda, it is recommended to manually install a torch compatible with the local cuda version before proceeding to the next step.
+# To avoid compatibility issues between the automatically installed torch and your local CUDA, it is recommended to manually install a torch version compatible with your local CUDA before proceeding to the next step.
 pip install -r requirements.txt 
 ```
 
 | Requirement | Recommend |
-| ---------------| ---------------- |
-| accelerate    |             1.0.1 |
-| deepspeed | 0.15.4|
-| transformers | 4.44.2|          
+| --------------- | ---------------- |
+| accelerate | 1.0.1 |
+| deepspeed | 0.15.4 |
+| transformers | 4.44.2 |
 
 # Fine-tuning the Model
 
-After installing the dependencies, we will demonstrate through specific examples how to use our own data to fine-tune the open-source ranking model (BAAI/bge-reranker-v2-m3), or train a ranking model from scratch using BERT-like models (hfl/chinese-roberta-wwm-ext) and LLM-like models (Qwen/Qwen2.5-1.5B). At the same time, we also support distilling the ranking ability of LLM-like models into smaller BERT models.
-
-## Data Format
-
-We support the following standard data format:
-```
-{"query": str, "hits": [{"content": xxx, "label_1": xxx, "label_2": xxx}, ...]}
-```
-- `hits` represents all document samples under the query, and `content` is the actual content of the document.
-- `label_1/2/...` represents the relevance labels assigned through manual annotation or scoring by a teacher model, serving as the supervision signal for model fine-tuning.
+After installing the dependencies, we'll use specific examples to demonstrate how to fine-tune an open-source ranking model (BAAI/bge-reranker-v2-m3) using your own data. Alternatively, you can train a ranking model from scratch using BERT-based models (hfl/chinese-roberta-wwm-ext) or LLM-based models (Qwen/Qwen2.5-1.5B). Additionally, we support distilling the ranking capabilities of LLM-based models into smaller BERT models.
 
 ## Data Loading
 
-We provide two data loading methods to support different types of loss functions:
+We offer two methods for loading datasets to support different types of loss functions:
 
-**Single-point Data Loading** supports Mean Squared Error (`MSE`) and Binary Cross Entropy loss, aiming to optimize the absolute relevance judgment of a single query-content point. You need to manually specify the relevance labels used in the dataset: `train_label_key` and `val_label_key`. When the relevance is a multi-level label, by setting `max_label` and `min_label`, the dataset will automatically scale the multi-level labels uniformly to the 0-1 score interval. For example, if there are three-level labels (0, 1, 2) in the dataset, after scaling, we get { label 0: 0, label 1: 0.5, label 2: 1}. During prediction, the final prediction score of the model is the logit output by the model, which can be normalized to the 0-1 interval using the sigmoid function later. Users can use an LLM to obtain relevance labels for distillation. You can find the code for using an LLM to score and annotate relevance in the [examples/distill_llm_to_bert](../../../examples/distill_llm_to_bert) directory.
+### Pointwise Data Loading
 
-``` 
+The standard format for a pointwise dataset is as shown in [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl):
+```
+{"query": str, "content": str, "label1": xx, , "label2": xx}
+```
+- `content` represents the actual content of the document corresponding to the query.
+- `label*` is the relevance label assigned through manual annotation or scoring by a teacher model, serving as the supervision signal for model fine-tuning.
+
+This configuration supports `Mean Squared Error` and `Binary Cross Entropy` losses. The optimization goal is to determine the absolute relevance of a single query-content pair. You need to manually specify the relevance label keys used in the dataset: `train_label_key` and `val_label_key`. When dealing with multi-level labels, by setting `max_label` and `min_label`, the dataset will automatically scale the multi-level labels uniformly to the 0-1 score range. For example, if the dataset has three levels of labels (0, 1, 2), after scaling, you'll get {label 0: 0, label 1: 0.5, label 2: 1}. During prediction, the final prediction score of the model is the logit output by the model, which can be normalized to the 0-1 range using the sigmoid function. You can use an LLM to obtain relevance labels for distillation. Example code for using an LLM to perform relevance scoring and annotation can be found in the [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) directory.
+
+The complete configuration information is as follows:
+```
 train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
+train_dataset_type: "pointwise"
 max_label: 2
 min_label: 0
 max_len: 512
 shuffle_rate: 0.0
-train_label_key: "label"
+train_label_key: "label" # customized key
 val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
-val_label_key: "label"
+val_dataset_type: "pointwise"
+val_label_key: "label" # customized key
+loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 ```
 
-**Grouped Data Loading** supports Pairwise RankNet Loss and Listwise Cross Entropy loss, aiming to optimize the relative relevance judgment of query-list[content]. `train_group_size` sets how many documents' relative relevance need to be considered simultaneously for each query, and if the number of original documents is insufficient, repeated sampling will be performed. `train_label_key` and `val_label_key` specify the source of the supervised signal, which can be manual annotation or listwise ranking using an advanced language model.
+### Grouped Data Loading
 
+The standard format for a grouped dataset is as shown in [grouped_reranker_train_data.jsonl](../../../example_data/grouped_reranker_train_data.jsonl):
+```
+{"query": str, "hits": [{"content": xxx, "label1": xxx, "label2": xxx}, ...]}
+```
+- `hits` contains all document samples under the query, and `content` is the actual content of the document.
+- `label*` represents the relevance labels assigned through manual annotation or scoring by a teacher model, serving as the supervision signal for model fine-tuning.
+
+This configuration supports `Pairwise RankNet Loss` and `Listwise Cross Entropy` losses. The optimization goal is to determine the relative relevance of a query and a list of documents. `train_group_size` indicates how many documents' relative relevance should be considered simultaneously for each query. If the number of original documents is insufficient, we'll perform repeated sampling to reach the `train_group_size`. `train_label_key` and `val_label_key` specify which type of supervised signal in the dataset to use, which can be either manual annotation or the result of listwise ranking using a high-level language model.
+
+The complete configuration information is as follows:
 ```
 train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
 train_dataset_type: "grouped"
-train_label_key: "gpt4o_listwise"
+train_label_key: "listwise_score" # customized key, eg. "pointwise_score" or "listwise_score"
 train_group_size: 10
 shuffle_rate: 0.0
-max_len: 128
-val_dataset: ../../../example_data/grouped_reranker_eval_data.jsonl"
+max_len: 512
+val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
 val_dataset_type: "grouped"
-val_label_key: "gpt4o_listwise"
+val_label_key: "label"
+loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 ```
 
 ## Training
 
-### Training of BERT-like models, fsdp(ddp)
-
+Training BERT-based Models with FSDP (DDP)
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/xlmroberta_default_config.yaml \
 train_reranker.py \
 --config config/training_bert.yaml \
->./logs/training_bert.log &
+> ./logs/training_bert.log &
 ```
 
-```
-
-### Training of LLM-based model, deepspeed(zero1-2, not for zero3)
+Training LLM-based Models with DeepSpeed (Only applicable to zero 1-2; zero 3 is not currently compatible due to a bug when saving the model)
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/deepspeed/deepspeed_zero1.yaml \
 train_reranker.py \
 --config config/training_llm.yaml \
->./logs/training_llm_deepspeed1.log &
+> ./logs/training_llm_deepspeed1.log &
 ```
 
-### Parameter Explanation
+## Parameter Explanation
 
-Configuration file for multi-GPU training:
-
-- For BERT-like models, fsdp is used by default to support multi-GPU training. Here is an example of the configuration file.
-  - [default_fsdp](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/default_fsdp.yaml): If you want to train a ranking model from scratch based on hfl/chinese-roberta-wwm-ext, use this configuration file.
-  - [xlmroberta_default_config](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/xlmroberta_default_config.yaml): If you want to fine-tune on the basis of BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1, BAAI/bge-reranker-v2-m3, use this configuration file, as they are all trained based on the multilingual XLMRoberta.
-
-- For LLM-like models, it is recommended to use deepspeed to support multi-GPU training. Currently, only zero1 and zero2 are supported during the training phase. Here are examples of the configuration files.
+### Multi-GPU Training Configuration Files
+- For BERT-based models, FSDP is used by default to support multi-GPU training. Here are examples of configuration files:
+  - [default_fsdp](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/default_fsdp.yaml): Use this configuration file if you want to train a ranking model from scratch based on hfl/chinese-roberta-wwm-ext.
+  - [xlmroberta_default_config](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/xlmroberta_default_config.yaml): Use this configuration file if you want to fine-tune models such as BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1, or BAAI/bge-reranker-v2-m3, as they are all trained on the multilingual XLMRoberta.
+- For LLM-based models, DeepSpeed is recommended to support multi-GPU training. Currently, only the training phases of zero1 and zero2 are supported. Here are examples of configuration files:
   - [deepspeed_zero1](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/deepspeed/deepspeed_zero1.yaml)
   - [deepspeed_zero2](https://github.com/NLPJCL/RAG-Retrieval/blob/master/config/deepspeed/deepspeed_zero2.yaml)
+- Modifying Multi-GPU Training Configuration Files:
+  - Change `CUDA_VISIBLE_DEVICES="0"` in the command to the GPUs you want to use.
+  - Modify the `num_processes` parameter in the above-mentioned configuration files to the number of GPUs you want to use.
 
-- Modification of the multi-GPU training configuration file:
-  - Modify the CUDA_VISIBLE_DEVICES="0" in the command to the multi-GPUs you want to set.
-  - Modify the `num_processes` in the above-mentioned configuration file to the number of GPUs you want to run.
-
-Model-related:
-- `model_name_or_path`: The name of the open-source reranker model or the location on the local server where it is downloaded. For example: BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1. You can also train from scratch, such as BERT: hfl/chinese-roberta-wwm-ext and LLM: Qwen/Qwen2.5-1.5B.
-- `model_type`: Currently, bert_encoder or llm_decoder type models are supported.
+### Model-related Parameters
+- `model_name_or_path`: The name of an open-source reranker model or the local server location where it is downloaded. For example: BAAI/bge-reranker-base, maidalun1020/bce-reranker-base_v1. You can also train from scratch, such as using BERT: hfl/chinese-roberta-wwm-ext or LLM: Qwen/Qwen2.5-1.5B.
+- `model_type`: Currently supports bert_encoder or llm_decoder models.
 - `max_len`: The maximum input length supported by the data.
 
-Dataset-related:
-- `train_dataset`: The training dataset, with the format described above.
-- `val_dataset`: The validation dataset, with the same format as the training dataset (if there is none, set it to None).
-- `max_label`: The maximum label in the dataset, with a default value of 1.
-- `min_label`: The minimum label in the dataset, with a default value of 0.
+### Dataset-related Parameters
+- `train_dataset`: The training dataset. See the above for the specific format.
+- `val_dataset`: The validation dataset, with the same format as the training dataset (set to `None` if not available).
+- `max_label`: The maximum label in the pointwise dataset, defaulting to 1.
+- `min_label`: The minimum label in the pointwise dataset, defaulting to 0.
 
-Training-related:
-- `output_dir`: The directory for saving the checkpoints during training and the final model.
-- `loss_type`: Choose from point_ce (Cross Entropy Loss) and point_mse (Mean Squared Error Loss).
-- `epoch`: The number of epochs the model is trained on the training dataset.
-- `lr`: The learning rate, generally between 1e-5 and 5e-5.
+### Training-related Parameters
+- `output_dir`: The directory where checkpoints and the final model are saved during training.
+- `loss_type`: Choose from `point_ce` (Cross Entropy Loss) and `point_mse` (Mean Squared Error Loss).
+- `epoch`: The number of epochs to train the model on the training dataset.
+- `lr`: The learning rate, typically between 1e-5 and 5e-5.
 - `batch_size`: The number of query-doc pairs in each batch.
 - `seed`: Set a unified seed for reproducibility of experimental results.
-- `warmup_proportion`: The proportion of the number of learning rate warm-up steps to the total number of model update steps. If set to 0, no learning rate warm-up will be performed, and the cosine annealing will start directly from the set `lr`.
-- `stable_proportion`: The proportion of the number of steps where the learning rate remains stable to the total number of model update steps, with a default value of 0.
-- `gradient_accumulation_steps`: The number of gradient accumulation steps. The actual batch_size of the model is equal to `batch_size` * `gradient_accumulation_steps` * `num_of_GPUs`.
-- `mixed_precision`: Whether to perform mixed-precision training to reduce the memory requirement. Mixed-precision training optimizes memory usage by using low precision for calculations and high precision for parameter updates. And bf16 (Brain Floating Point 16) can effectively reduce abnormal situations of loss scaling, but this type is only supported by some hardware.
-- `save_on_epoch_end`: Whether to save the model at the end of each epoch.
-- `num_max_checkpoints`: Control the maximum number of checkpoints saved in a single training session.
-- `log_interval`: The model records the loss every x parameter updates.
-- `log_with`: Visualization tools, choose from wandb and tensorboard.
+- `warmup_proportion`: The proportion of learning rate warm-up steps to the total number of model update steps. If set to 0, no learning rate warm-up will be performed, and the learning rate will directly decay cosine-wise from the set `lr`.
+- `stable_proportion`: The proportion of steps during which the learning rate remains stable to the total number of model update steps, defaulting to 0.
+- `gradient_accumulation_steps`: The number of gradient accumulation steps. The actual batch size of the model is equal to `batch_size` * `gradient_accumulation_steps` * `num_of_GPUs`.
+- `mixed_precision`: Whether to perform mixed-precision training to reduce GPU memory requirements. Mixed-precision training optimizes GPU memory usage by using low precision for computation and high precision for parameter updates. Additionally, bf16 (Brain Floating Point 16) can effectively reduce abnormal loss scaling situations, but this type is only supported by some hardware.
+- `save_on_epoch_end`: Whether to save the model after each epoch.
+- `num_max_checkpoints`: Controls the maximum number of checkpoints saved during a single training session.
+- `log_interval`: Record the loss every `x` parameter updates of the model.
+- `log_with`: The visualization tool, choose from `wandb` and `tensorboard`.
 
-Model parameters:
-- `num_labels`: The number of logits output by the model, that is, the number of classification categories of the model.
-- When an LLM is used for discriminative ranking scoring, the input format needs to be manually constructed, introducing the following parameters:
-  - `query_format`, e.g. "query: {}"
-  - `document_format`, e.g. "document: {}" 
-  - `seq`: Separate the query and document parts, e.g. " "
-  - `special_token`: Indicate the end of the document content and guide the model to start scoring. Theoretically, it can be any token, e.g. "\</s>" 
-  - The overall format is: "query: xxx document: xxx\</s>" 
+### Model Parameter-related Parameters
+- `num_labels`: The number of logits output by the model, which is the number of classification categories of the model, usually set to 1 by default.
+- When using an LLM for discriminative ranking scoring, you need to manually construct the input format, which introduces the following parameters:
+  - `query_format`, e.g., "query: {}"
+  - `document_format`, e.g., "document: {}"
+  - `seq`: Separates the query and document parts, e.g., " "
+  - `special_token`: Indicates the end of the document content and guides the model to start scoring. Theoretically, it can be any token, e.g., "\</s>"
+  - The overall format is: "query: xxx document: xxx\</s>"
 
 # Loading the Model for Prediction
 
-For the saved model, you can easily load the model for prediction.
+You can easily load a saved model for prediction.
 
-Cross-Encoder model (BERT-like)
+### Cross-Encoder Model (BERT-like)
 ```python
 ckpt_path = "./bge-reranker-m3-base"
 reranker = CrossEncoder.from_pretrained(
@@ -146,8 +156,8 @@ reranker.model.to("cuda:0")
 reranker.eval()
 
 input_lst = [
-    ["我喜欢中国", "我喜欢中国"],
-    ["我喜欢美国", "我一点都不喜欢美国"]
+    ["I like China", "I like China"],
+    ["I like the United States", "I don't like the United States at all"]
 ]
 
 res = reranker.compute_score(input_lst)
@@ -156,9 +166,9 @@ print(torch.sigmoid(res[0]))
 print(torch.sigmoid(res[1]))
 ```
 
-LLM-Decoder model (Scalar mapping based on MLP)
+### LLM-Decoder Model (Based on MLP for Scalar Mapping)
 
-> To meet the special case of using an LLM such as "Qwen/Qwen2.5-1.5B" for discriminative ranking, a relevant format has been designed. The actual effect is: "query: {xxx} document: {xxx}\</s>". Experiments have shown that the introduction of \</s> significantly improves the ranking performance of the LLM [from https://arxiv.org/abs/2411.04539 section 4.3].
+> To meet the special requirements of using an LLM like "Qwen/Qwen2.5-1.5B" for discriminative ranking, a specific format has been designed. The actual effect is: "query: {xxx} document: {xxx}\</s>". Experiments have shown that the introduction of \</s> significantly improves the ranking performance of the LLM [from https://arxiv.org/abs/2411.04539 section 4.3].
 
 ```python
 ckpt_path = "./Qwen2-1.5B-Instruct"
@@ -174,8 +184,8 @@ reranker.model.to("cuda:0")
 reranker.eval()
 
 input_lst = [
-    ["我喜欢中国", "我喜欢中国"],
-    ["我喜欢美国", "我一点都不喜欢美国"],
+    ["I like China", "I like China"],
+    ["I like the United States", "I don't like the United States at all"],
 ]
 
 res = reranker.compute_score(input_lst)

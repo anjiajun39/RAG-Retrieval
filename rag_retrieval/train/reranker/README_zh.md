@@ -20,65 +20,81 @@ pip install -r requirements.txt
 
 在安装好依赖后，我们通过具体的示例来展示如何利用我们自己的数据来微调开源的排序模型 (BAAI/bge-reranker-v2-m3)，或者从 BERT 类模型 (hfl/chinese-roberta-wwm-ext) 以及 LLM 类模型 (Qwen/Qwen2.5-1.5B) 从零开始训练排序模型。与此同时，我们也支持将 LLM 类模型的排序能力蒸馏到较小的 BERT 模型中去。
 
-## 数据格式
-
-我们支持如下的标准数据格式：
-```
-{"query": str, "hits": [{"content": xxx, "label_1": xxx, "label_2": xxx}, ...]}
-```
-- `hits` 为 query 下所有的文档样本，`content` 是文档实际内容。
-- `label_1/2/...` 表示通过人工标注或教师模型打分所分配的相关性标签，作为模型微调的监督信号。
-
 
 ## 数据加载
 
-我们提供两种数据加载方式用于支持不同类型的损失函数：
+我们提供两种数据集加载方式，用于支持不同类型的损失函数：
 
-**单点数据加载**，支持均方损失 `MSE` 和二分类交叉熵损失 `Binary Cross Entropy`，目标优化单点 query-content 的绝对相关性判断。需要手动指明数据集中所使用的相关性标签： `train_label_key` 和 `val_label_key`。当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。例如数据集中存在三级标签（0，1，2），经过放缩后，得到{ label 0: 0，label 1: 0.5，label 2: 1}。在预测时，模型最终的预测分数为模型输出的 logit，后续可以经过 sigmoid 归一化为 0-1 区间。用户可以利用 LLM 来得到相关性标签以进行蒸馏，在 [examples/distill_llm_to_bert](../../../examples/distill_llm_to_bert) 目录下可以找到用 LLM 进行相关性打分标注的代码。
+### 单点数据加载
 
-``` 
+单点数据集标准格式，示例见 [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl)：
+```
+{"query": str, "content": str, "label": xx, , "label1": xx}
+```
+- `content` 是 query 所对应的文档实际内容。
+- `label*` 表示通过人工标注或教师模型打分所分配的相关性标签，作为模型微调的监督信号。
+
+
+该配置下支持均方损失 `MSE` 和二分类交叉熵损失 `Binary Cross Entropy`，优化目标为单点 query-content 的绝对相关性判断。用户需要手动选择数据集中所使用的相关性标签： `train_label_key` 和 `val_label_key`。当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。例如数据集中存在三级标签（0，1，2），经过放缩后，得到{ label 0: 0，label 1: 0.5，label 2: 1}。在预测时，模型最终的预测分数为模型输出的 logit，后续可以经过 sigmoid 归一化为 0-1 区间。用户可以利用 LLM 来得到相关性标签以进行蒸馏，在 [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) 目录下可以找到用 LLM 进行相关性打分标注的示例代码。
+
+完整配置信息如下：
+```
 train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
+train_dataset_type: "pointwise"
 max_label: 2
 min_label: 0
 max_len: 512
 shuffle_rate: 0.0
 train_label_key: "label"
 val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
+val_dataset_type: "pointwise"
 val_label_key: "label"
+loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 ```
 
-**分组数据加载**，支持成对损失 `Pairwise RankNet Loss` 和交叉熵损失 `Listwise Cross Entropy`，目标优化 query-list[content] 的相对相关性判断。`train_group_size` 设定针对每个 query，需要同时考虑多少个文档的相对相关，并且如果原始文档数目数量不足，会进行重复采样。`train_label_key` 和 `val_label_key` 指明有监督信号的来源，可以是人工标注，也可以是用高级语言模型进行的 listwise 排序。
+### 分组数据加载
 
+分组数据集标准格式，示例见 [grouped_reranker_train_data.jsonl](../../../example_data/grouped_reranker_train_data.jsonl)：
+```
+{"query": str, "hits": [{"content": xxx, "label_1": xxx, "label_2": xxx}, ...]}
+```
+- `hits` 为 query 下所有的文档样本，content 是文档实际内容。
+- `label*` 表示通过人工标注或教师模型打分所分配的相关性标签，作为模型微调的监督信号。
+
+该配置下支持成对损失 `Pairwise RankNet Loss` 和交叉熵损失 `Listwise Cross Entropy`，优化目标为 query-list[content] 的相对相关性判断。`train_group_size` 指的是针对每个 query需要同时考虑多少个文档的相对相关性。如果原始文档数目数量不足，则我们会进行重复采样来达到 `train_group_size` 的数目。`train_label_key` 和 `val_label_key` 使用数据集中的具体哪一类有监督信号，其可以是人工标注，也可以是用高级语言模型进行 listwise 排序的结果。
+
+完整配置信息如下：
 ```
 train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
 train_dataset_type: "grouped"
-train_label_key: "gpt4o_listwise"
+train_label_key: "listwise_score" # customized key: "pointwise_score" or "listwise_score"
 train_group_size: 10
 shuffle_rate: 0.0
-max_len: 128
-val_dataset: ../../../example_data/grouped_reranker_eval_data.jsonl"
+max_len: 512
+val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
 val_dataset_type: "grouped"
-val_label_key: "gpt4o_listwise"
+val_label_key: "label"
+loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 ```
 
 ## 训练
 
-#bert类模型训练, fsdp(ddp)
+BERT 类模型训练, fsdp(ddp)
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/xlmroberta_default_config.yaml \
 train_reranker.py \
 --config config/training_bert.yaml \
->./logs/training_bert.log &
+> ./logs/training_bert.log &
 ```
 
-#LLM类模型训练, deepspeed(zero1-2, not for zero3)
+LLM 类模型训练, deepspeed（仅适用于zero 1-2, zero 3 暂不适配【保存模型的时候有 bug】）
 ```bash
 CUDA_VISIBLE_DEVICES="0,1" nohup accelerate launch \
 --config_file ../../../config/deepspeed/deepspeed_zero1.yaml \
 train_reranker.py \
 --config config/training_llm.yaml \
->./logs/training_llm_deepspeed1.log &
+> ./logs/training_llm_deepspeed1.log &
 ```
 
 ## **参数解释**
@@ -104,10 +120,10 @@ train_reranker.py \
 - `max_len`：数据支持的最大输入长度
 
 数据集方面：
-- `train_dataset`：训练数据集，格式见上文
+- `train_dataset`：训练数据集，具体格式见上文
 - `val_dataset`：验证数据集，格式同训练集(如果没有，设置为 None 即可)
-- `max_label`：数据集中的最大 label，默认为 1
-- `min_label`：数据集中的最小 label，默认为 0
+- `max_label`：单点数据集中的最大 label，默认为 1
+- `min_label`：单点数据集中的最小 label，默认为 0
 
 训练方面：
 - `output_dir`：训练过程中保存的 checkpoint 和最终模型的目录
@@ -122,11 +138,11 @@ train_reranker.py \
 - `mixed_precision`：是否进行混合精度的训练，以降低显存的需求。混合精度训练通过在计算使用低精度，更新参数用高精度，来优化显存占用。并且 bf16（Brain Floating Point 16）可以有效降低 loss scaling 的异常情况，但该类型仅被部分硬件支持
 - `save_on_epoch_end`：是否在每一个 epoch 结束后都保存模型
 - `num_max_checkpoints`：控制单次训练下保存的最多 checkpoints 数目
-- `log_interval`：模型每**更新** x 次参数记录一次 loss
+- `log_interval`：模型每更新 x 次参数记录一次 loss
 - `log_with`：可视化工具，从 wandb 和 tensorboard 中选择
 
 模型参数：
-- `num_labels`：模型输出 logit 的数目，即为模型分类类别的个数
+- `num_labels`：模型输出 logit 的数目，即为模型分类类别的个数，一般默认设置为 1
 - 对于 LLM 用于判别式排序打分时，需要人工构造输入格式，由此引入下列参数
   - `query_format`, e.g. "query: {}"
   - `document_format`, e.g. "document: {}" 
