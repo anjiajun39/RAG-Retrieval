@@ -48,6 +48,7 @@ def parse_args():
 
     parser.add_argument("--train_dataset", help='trainset')
     parser.add_argument("--train_dataset_vec", help='distillion trainset embedding')
+    parser.add_argument("--val_dataset", help="validation file", default=None)
     parser.add_argument('--shuffle', action='store_true', help='if shuffle')
 
     parser.add_argument('--neg_nums', type=int, default=15)
@@ -130,6 +131,14 @@ def main():
             query_max_len=args.query_max_len,
             passage_max_len=args.passage_max_len,
         )
+        if args.val_dataset:
+            val_dataset = EmbeddingDataset(
+                train_data_path=args.val_dataset,
+                tokenizer=tokenizer,
+                neg_nums=args.neg_nums,
+                query_max_len=args.query_max_len,
+                passage_max_len=args.passage_max_len,
+            )
     elif args.train_type=="distill":
         model = DistillEmbedding.from_pretrained(
             model_name_or_path=args.model_name_or_path,
@@ -153,7 +162,16 @@ def main():
         num_workers=num_workers,
         pin_memory=True,
     )
-
+    val_dataloader = None
+    if args.val_dataset:
+        val_dataloader = DataLoader(
+            val_datast,
+            batch_size=args.batch_size,
+            collate_fn=train_datast.collate_fn,
+            shuffle=args.shuffle,
+            num_workers=num_workers,
+            pin_memory=True,
+        )
     accelerator.print(f'train_dataloader total is : {len(train_dataloader)}')
     accelerator.print(f'train_dataloader data_type is : {train_datast.data_type}')
 
@@ -171,7 +189,7 @@ def main():
     )
     accelerator.print(lr_scheduler.lr_lambdas)
 
-    model, optimizer, lr_scheduler,train_dataloader = accelerator.prepare(model, optimizer, lr_scheduler,train_dataloader)
+    model, optimizer, lr_scheduler, train_dataloader, validation_dataloader = accelerator.prepare(model, optimizer, lr_scheduler, train_dataloader, validation_dataloader)
 
     accelerator.wait_for_everyone()
 
@@ -179,7 +197,7 @@ def main():
         model=model,
         optimizer=optimizer,
         train_dataloader=train_dataloader,
-        validation_dataloader=None,
+        validation_dataloader=val_dataloader,
         accelerator=accelerator,
         epochs=args.epochs,
         lr_scheduler=lr_scheduler,
