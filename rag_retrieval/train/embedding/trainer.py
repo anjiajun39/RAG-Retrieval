@@ -29,6 +29,7 @@ class Trainer:
         epochs: int = 3,
         lr_scheduler: LRScheduler,
         log_interval: int = 50,
+        eval_steps: int = 50,
         save_on_epoch_end: bool = True,
         tokenizer,
     ):
@@ -40,6 +41,7 @@ class Trainer:
         self.accelerator = accelerator
         self.epochs = epochs
         self.log_interval = log_interval
+        self.eval_steps = eval_steps
         self.save_on_epoch_end = save_on_epoch_end
         self.tokenizer = tokenizer
 
@@ -89,6 +91,15 @@ class Trainer:
                         log_dic,
                         step=self.current_step,
                     )
+                if self.eval_steps and batch_index % self.eval_steps == 0 and self.validation_dataloader:
+                    validation_loss = evaluate(
+                        self.model,
+                        self.validation_dataloader,
+                        self.validation_loss_tracker,
+                    )
+                    validation_metrics = self.add_prefix({'loss': validation_loss}, 'validation')
+                    self.accelerator.print(f'Step {self.current_step} Validation loss: {validation_loss:.6f}')
+                    self.accelerator.log(validation_metrics, step=self.current_step)
 
             train_metrics = self.add_prefix({'loss': self.train_loss_tracker.loss}, 'train')
             self.accelerator.log(train_metrics, step=current_epoch)
