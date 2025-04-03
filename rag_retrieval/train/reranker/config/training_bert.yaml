@@ -20,9 +20,9 @@ document_format: "{}"
 # loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 
 ## Grouped Dataset
-train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
+train_dataset: "../../../example_data/grouped_reranker_train_data_listwise_label.jsonl"
 train_dataset_type: "grouped"
-train_label_key: "listwise_score" # customized key: "pointwise_score" or "listwise_score"
+train_label_key: "label"
 train_group_size: 10
 shuffle_rate: 0.0
 max_len: 512

@@ -58,7 +58,7 @@ This configuration supports `Pairwise RankNet Loss` and `Listwise Cross Entropy 
 
 Complete configuration:
 ```
-train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
+train_dataset: "../../../example_data/grouped_reranker_train_data_listwise_label.jsonl"
 train_dataset_type: "grouped"
 train_group_size: 10
 shuffle_rate: 0.0
