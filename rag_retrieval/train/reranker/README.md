@@ -19,20 +19,20 @@ After installing the dependencies, we'll use specific examples to demonstrate ho
 
 ## Data Loading
 
-We offer two methods for loading datasets to support different types of loss functions:
+We provide two dataset loading methods to support different types of loss functions:
 
 ### Pointwise Data Loading
 
-The standard format for a pointwise dataset is as shown in [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl):
+The standard format for pointwise datasets is as follows. See an example in [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl):
 ```
-{"query": str, "content": str, "label1": xx, , "label2": xx}
+{"query": str, "content": str, "label": xx}
 ```
-- `content` represents the actual content of the document corresponding to the query.
-- `label*` is the relevance label assigned through manual annotation or scoring by a teacher model, serving as the supervision signal for model fine-tuning.
+- `content` is the actual document content corresponding to the `query`.
+- `label` represents the relevance label assigned through either human annotation (multi-level relevance labels: 0/1/2/...) or teacher model scoring (a continuous score between 0 and 1), which serves as the supervision signal for model fine-tuning.
 
-This configuration supports `Mean Squared Error` and `Binary Cross Entropy` losses. The optimization goal is to determine the absolute relevance of a single query-content pair. You need to manually specify the relevance label keys used in the dataset: `train_label_key` and `val_label_key`. When dealing with multi-level labels, by setting `max_label` and `min_label`, the dataset will automatically scale the multi-level labels uniformly to the 0-1 score range. For example, if the dataset has three levels of labels (0, 1, 2), after scaling, you'll get {label 0: 0, label 1: 0.5, label 2: 1}. During prediction, the final prediction score of the model is the logit output by the model, which can be normalized to the 0-1 range using the sigmoid function. You can use an LLM to obtain relevance labels for distillation. Example code for using an LLM to perform relevance scoring and annotation can be found in the [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) directory.
+This configuration supports Mean Squared Error (`MSE`) loss and Binary Cross Entropy (`BCE`) loss, with the optimization objective being the absolute relevance judgment between query and content. When relevance is represented as multi-level labels, the dataset will automatically scale these labels into the 0-1 score range using the `max_label` and `min_label` settings. For example, if the dataset contains three levels of labels (0, 1, 2), they will be scaled to `{ label 0: 0, label 1: 0.5, label 2: 1 }`. During inference, the model’s predicted score is the raw logit output, which can be normalized to the 0-1 range using a sigmoid function. Users can utilize LLMs to obtain relevance labels for distillation. Example code for LLM-based relevance annotation can be found in the directory [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker).
 
-The complete configuration information is as follows:
+Complete configuration:
 ```
 train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
 train_dataset_type: "pointwise"
@@ -40,35 +40,31 @@ max_label: 2
 min_label: 0
 max_len: 512
 shuffle_rate: 0.0
-train_label_key: "label" # customized key
 val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
 val_dataset_type: "pointwise"
-val_label_key: "label" # customized key
 loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 ```
 
 ### Grouped Data Loading
 
-The standard format for a grouped dataset is as shown in [grouped_reranker_train_data.jsonl](../../../example_data/grouped_reranker_train_data.jsonl):
+The standard format for grouped datasets is as follows. See examples in [grouped_reranker_train_data_pointwise_label.jsonl](../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl) & [grouped_reranker_train_data_listwise_label.jsonl](../../../example_data/grouped_reranker_train_data_listwise_label.jsonl):
 ```
-{"query": str, "hits": [{"content": xxx, "label1": xxx, "label2": xxx}, ...]}
+{"query": str, "hits": [{"content": xxx, "label": xxx}, ...]}
 ```
-- `hits` contains all document samples under the query, and `content` is the actual content of the document.
-- `label*` represents the relevance labels assigned through manual annotation or scoring by a teacher model, serving as the supervision signal for model fine-tuning.
+- `hits` contains all document samples under a given `query`, where `content` is the actual document content.
+- `label` represents the relevance label assigned through either human annotation (multi-level relevance labels: 0/1/2/...) or teacher model scoring (not necessarily limited to a continuous score between 0 and 1, but possibly a list-based relative ranking), serving as the supervision signal for model fine-tuning.
 
-This configuration supports `Pairwise RankNet Loss` and `Listwise Cross Entropy` losses. The optimization goal is to determine the relative relevance of a query and a list of documents. `train_group_size` indicates how many documents' relative relevance should be considered simultaneously for each query. If the number of original documents is insufficient, we'll perform repeated sampling to reach the `train_group_size`. `train_label_key` and `val_label_key` specify which type of supervised signal in the dataset to use, which can be either manual annotation or the result of listwise ranking using a high-level language model.
+This configuration supports `Pairwise RankNet Loss` and `Listwise Cross Entropy Loss`, with the optimization objective being the relative relevance judgment among multiple documents for a given query. The parameter `train_group_size` specifies the number of documents to consider simultaneously for each query. If the number of available documents is insufficient, samples will be duplicated to meet the `train_group_size` requirement.
 
-The complete configuration information is as follows:
+Complete configuration:
 ```
 train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
 train_dataset_type: "grouped"
-train_label_key: "listwise_score" # customized key, eg. "pointwise_score" or "listwise_score"
 train_group_size: 10
 shuffle_rate: 0.0
 max_len: 512
 val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
 val_dataset_type: "grouped"
-val_label_key: "label"
 loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 ```
 

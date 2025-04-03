@@ -29,13 +29,13 @@ pip install -r requirements.txt
 
 单点数据集标准格式，示例见 [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl)：
 ```
-{"query": str, "content": str, "label": xx, , "label1": xx}
+{"query": str, "content": str, "label": xx}
 ```
 - `content` 是 query 所对应的文档实际内容。
-- `label*` 表示通过人工标注或教师模型打分所分配的相关性标签，作为模型微调的监督信号。
+- `label` 表示通过人工标注（多级相关性标签: 0/1/2/..）或教师模型打分（0-1 之间的连续值分数）所分配的相关性标签，作为模型微调的监督信号。
 
 
-该配置下支持均方损失 `MSE` 和二分类交叉熵损失 `Binary Cross Entropy`，优化目标为单点 query-content 的绝对相关性判断。用户需要手动选择数据集中所使用的相关性标签： `train_label_key` 和 `val_label_key`。当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。例如数据集中存在三级标签（0，1，2），经过放缩后，得到{ label 0: 0，label 1: 0.5，label 2: 1}。在预测时，模型最终的预测分数为模型输出的 logit，后续可以经过 sigmoid 归一化为 0-1 区间。用户可以利用 LLM 来得到相关性标签以进行蒸馏，在 [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) 目录下可以找到用 LLM 进行相关性打分标注的示例代码。
+该配置下支持均方损失 `MSE` 和二分类交叉熵损失 `Binary Cross Entropy`，优化目标为单点 query-content 的绝对相关性判断。当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。例如数据集中存在三级标签（0，1，2），经过放缩后，得到{ label 0: 0，label 1: 0.5，label 2: 1}。在预测时，模型最终的预测分数为模型输出的 logit，后续可以经过 sigmoid 归一化为 0-1 区间。用户可以利用 LLM 来得到相关性标签以进行蒸馏，在 [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) 目录下可以找到用 LLM 进行相关性打分标注的示例代码。
 
 完整配置信息如下：
 ```
@@ -45,35 +45,31 @@ max_label: 2
 min_label: 0
 max_len: 512
 shuffle_rate: 0.0
-train_label_key: "label"
 val_dataset: "../../../example_data/pointwise_reranker_eval_data.jsonl"
 val_dataset_type: "pointwise"
-val_label_key: "label"
 loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 ```
 
 ### 分组数据加载
 
-分组数据集标准格式，示例见 [grouped_reranker_train_data.jsonl](../../../example_data/grouped_reranker_train_data.jsonl)：
+分组数据集标准格式，示例见 [grouped_reranker_train_data_pointwise_label.jsonl](../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl) & [grouped_reranker_train_data_listwise_label.jsonl](../../../example_data/grouped_reranker_train_data_listwise_label.jsonl)：
 ```
-{"query": str, "hits": [{"content": xxx, "label_1": xxx, "label_2": xxx}, ...]}
+{"query": str, "hits": [{"content": xxx, "label": xxx}, ...]}
 ```
 - `hits` 为 query 下所有的文档样本，content 是文档实际内容。
-- `label*` 表示通过人工标注或教师模型打分所分配的相关性标签，作为模型微调的监督信号。
+- `label` 表示通过人工标注（多级相关性标签: 0/1/2/..）或教师模型打分（不局限于0-1 之间的连续值分数，可以是一个列表式相对排序）所分配的相关性标签，作为模型微调的监督信号。示例数据如上所示。
 
-该配置下支持成对损失 `Pairwise RankNet Loss` 和交叉熵损失 `Listwise Cross Entropy`，优化目标为 query-list[content] 的相对相关性判断。`train_group_size` 指的是针对每个 query需要同时考虑多少个文档的相对相关性。如果原始文档数目数量不足，则我们会进行重复采样来达到 `train_group_size` 的数目。`train_label_key` 和 `val_label_key` 使用数据集中的具体哪一类有监督信号，其可以是人工标注，也可以是用高级语言模型进行 listwise 排序的结果。
+该配置下支持成对损失 `Pairwise RankNet Loss` 和交叉熵损失 `Listwise Cross Entropy`，优化目标为 query-list[content] 的相对相关性判断。`train_group_size` 指的是针对每个 query需要同时考虑多少个文档的相对相关性。如果原始文档数目数量不足，则我们会进行重复采样来达到 `train_group_size` 的数目。
 
 完整配置信息如下：
 ```
 train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
 train_dataset_type: "grouped"
-train_label_key: "listwise_score" # customized key: "pointwise_score" or "listwise_score"
 train_group_size: 10
 shuffle_rate: 0.0
 max_len: 512
 val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
 val_dataset_type: "grouped"
-val_label_key: "label"
 loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 ```
 
