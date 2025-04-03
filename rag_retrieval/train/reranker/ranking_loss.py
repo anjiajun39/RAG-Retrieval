@@ -48,15 +48,26 @@ def pairwise_ranknet(logits, labels, group_size):
     return nn.BCEWithLogitsLoss(reduction="mean", weight=weight)(pred_diffs, true_diffs)
 
 
-def listwise_ce(logits, labels, group_size, tao=0.1):
+def listwise_ce(logits, labels, group_size):
     grouped_logits = logits.view(-1, group_size)
     grouped_labels = labels.view(-1, group_size)
-    grouped_labels = torch.softmax(grouped_labels.detach(), dim=-1).to(
-        grouped_logits.device
-    )
-    loss = -torch.mean(
+
+    # 只保留 label != 0 的部分进行 softmax, 这里默认 label 为 0 是负样本
+    masked_labels = torch.where(grouped_labels == 0, grouped_labels, torch.tensor(float('-inf'), device=grouped_labels.device))
+    grouped_labels = torch.softmax(masked_labels.detach(), dim=-1)
+    
+    loss = - torch.mean(
         torch.sum(
-            grouped_labels * torch.log_softmax(grouped_logits / tao, dim=-1), dim=-1
+            grouped_labels * torch.log_softmax(grouped_logits, dim=-1), dim=-1
         )
     )
     return loss
+
+if __name__ == "__main__":
+    torch.manual_seed(42)  # 固定随机种子以获得可复现结果
+    logits = torch.randn(12, requires_grad=True)  # 生成 6 个随机 logit
+    labels = torch.tensor([1, 0, 2, 0, 3, 0, 1, 0, 2, 0, 3, 0], dtype=torch.float)  # 定义标签，其中 0 表示负样本
+    group_size = 4  # 每组 4 个样本
+    
+    loss = listwise_ce(logits, labels, group_size)
+    print("Loss:", loss.item())
