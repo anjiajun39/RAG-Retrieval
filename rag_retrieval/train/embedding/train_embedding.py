@@ -189,7 +189,7 @@ def main():
     )
     accelerator.print(lr_scheduler.lr_lambdas)
 
-    model, optimizer, lr_scheduler, train_dataloader, validation_dataloader = accelerator.prepare(model, optimizer, lr_scheduler, train_dataloader, validation_dataloader)
+    model, optimizer, lr_scheduler, train_dataloader, validation_dataloader = accelerator.prepare(model, optimizer, lr_scheduler, train_dataloader, val_dataloader)
 
     accelerator.wait_for_everyone()
 
