@@ -114,7 +114,7 @@ train_reranker.py \
 
 ### Training-related Parameters
 - `output_dir`: The directory where checkpoints and the final model are saved during training.
-- `loss_type`: Choose from `point_ce` (Cross Entropy Loss) and `point_mse` (Mean Squared Error Loss).
+- `loss_type`: Choose from `point_ce` (Cross Entropy Loss) and `point_mse` (Mean Squared Error Loss), `pairwise_ranknet` and `listwise_ce`.
 - `epoch`: The number of epochs to train the model on the training dataset.
 - `lr`: The learning rate, typically between 1e-5 and 5e-5.
 - `batch_size`: The number of query-doc pairs in each batch.
