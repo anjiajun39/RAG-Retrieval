@@ -47,8 +47,8 @@ def parse_args():
 
     parser.add_argument("--train_dataset", help='trainset')
     parser.add_argument("--train_dataset_vec", help='distillion trainset embedding')
+    parser.add_argument("--val_dataset", help="validation file", default=None)
     parser.add_argument('--shuffle', action='store_true', help='if shuffle')
-    parser.add_argument("--validation_dataset", help='validset')
 
     parser.add_argument('--neg_nums', type=int, default=15)
     parser.add_argument('--query_max_len', type=int, default=128)
