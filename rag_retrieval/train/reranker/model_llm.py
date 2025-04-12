@@ -47,7 +47,9 @@ class LLMDecoder(nn.Module):
                     logits, labels, self.train_group_size
                 )
             elif self.loss_type == "listwise_ce":
-                loss = ranking_loss.listwise_ce(logits, labels, self.train_group_size)
+                loss = ranking_loss.listwise_ce(
+                    logits, labels, self.train_group_size
+                )
             output["loss"] = loss
 
         return output
