@@ -65,7 +65,7 @@ def listwise_ce(logits, labels, group_size):
 
 if __name__ == "__main__":
     torch.manual_seed(42)  # 固定随机种子以获得可复现结果
-    logits = torch.randn(12, requires_grad=True)  # 生成 6 个随机 logit
+    logits = torch.randn(12, requires_grad=True)  # 生成 3*4 个随机 logit
     labels = torch.tensor([1, 0, 2, 0, 3, 0, 1, 0, 2, 0, 3, 0], dtype=torch.float)  # 定义标签，其中 0 表示负样本
     group_size = 4  # 每组 4 个样本
     
