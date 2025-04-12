@@ -53,7 +53,7 @@ def listwise_ce(logits, labels, group_size):
     grouped_labels = labels.view(-1, group_size)
 
     # 只保留 label != 0 的部分进行 softmax, 这里默认 label 为 0 是负样本
-    masked_labels = torch.where(grouped_labels == 0, grouped_labels, torch.tensor(float('-inf'), device=grouped_labels.device))
+    masked_labels = torch.where(grouped_labels != 0, grouped_labels, torch.tensor(float('-inf'), device=grouped_labels.device))
     grouped_labels = torch.softmax(masked_labels.detach(), dim=-1)
     
     loss = - torch.mean(
