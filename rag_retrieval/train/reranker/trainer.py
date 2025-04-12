@@ -69,13 +69,13 @@ class Trainer:
                     loss = batch_output['loss']
 
                     self.accelerator.backward(loss)
-                    if batch_index % self.log_interval == 0:
-                        # 仅适用于 zero 0/1，不适用于 zero 2/3、FSDP 等梯度分片存储的情况
-                        total_norm = torch.nn.utils.clip_grad_norm_(
-                            self.model.parameters(), 
-                            max_norm=float('inf'), # 设为无穷大以仅计算范数，不实际裁剪
-                            norm_type=2
-                        )
+                    # if batch_index % self.log_interval == 0:
+                    #     # 仅适用于 zero 0/1，不适用于 zero 2/3、FSDP 等梯度分片存储的情况
+                    #     total_norm = torch.nn.utils.clip_grad_norm_(
+                    #         self.model.parameters(), 
+                    #         max_norm=float('inf'), # 设为无穷大以仅计算范数，不实际裁剪
+                    #         norm_type=2
+                    #     )
                     
                     self.optimizer.step()
 
@@ -85,7 +85,7 @@ class Trainer:
                 if batch_index % self.log_interval == 0:
                     log_dic = {
                         'cur_loss': batch_output['loss'],
-                        'norm': total_norm,
+                        # 'norm': total_norm,
                         'lr':float(self.lr_scheduler.get_lr()[0]),
                         'avg_loss': self.train_loss_tracker.loss,
                     }
