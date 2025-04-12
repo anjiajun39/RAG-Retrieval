@@ -115,8 +115,7 @@ class GroupedRankerDataset(Dataset):
                         group_labels.append(label)
 
                     if len(group_docs) < self.train_group_size:
-                        print("debug", len(group_docs),
-                              self.train_group_size, len(data_dic["hits"]))
+                        print("debug", len(group_docs), self.train_group_size, len(data_dic["hits"]))
                         if len(data_dic["hits"]) - len(group_docs) > self.train_group_size - len(group_docs):
                             candidate_range = len(
                                 data_dic["hits"]) - len(group_docs)
