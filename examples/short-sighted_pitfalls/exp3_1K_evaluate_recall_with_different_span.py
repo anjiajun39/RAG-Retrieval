@@ -19,28 +19,26 @@ def find_topk_by_vecs(source_vecs: np.ndarray, target_vecs: np.ndarray, topk: in
 
 
 if __name__ == "__main__":
-    data_cache_dir = ""
-    model_cache_dir = ""
+    data_dir = "/processing_data/search/zengziyang/data/"
+    model_dir = "/processing_data/search/zengziyang/models/"
 
-    base_dir = ""
-    
     all_models = [
-        "BAAI/bge-m3",
-        "NovaSearch/jasper_en_vision_language_v1",
-        "nvidia/NV-Embed-v2",
-        "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
-        "Alibaba-NLP/gte-Qwen2-7B-instruct",
-        "jinaai/jina-embeddings-v2-base-en",
-        "jinaai/jina-embeddings-v3",
-        "infgrad/very_awesome",
+        # "infgrad/dewey_en_beta",
+        # "jinaai/jina-embeddings-v3",
+        # "BAAI/bge-m3",
+        # "NovaSearch/jasper_en_vision_language_v1",
+        # "nvidia/NV-Embed-v2",
+        # "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+        # "Alibaba-NLP/gte-Qwen2-7B-instruct",
+        # "jinaai/jina-embeddings-v2-base-en",
         "api_voyage",
         "api_openai",
     ]
     # model_name = "Alibaba-NLP/gte-Qwen2-7B-instruct"
     # model_name = "api_voyage" # "api_openai", "api_cohere", "api_voyage", "api_jina"
     
-    train_data_path = "examples/short-sighted_pitfalls/exp3_qp_train.jsonl"
-    test_data_path = "examples/short-sighted_pitfalls/exp3_qp_train.jsonl"
+    train_data_path = "exp3_qp_train.jsonl"
+    test_data_path = "exp3_qp_test.jsonl"
 
     topk_list = [1, 5, 10, 20, 30, 50]
     batch_size = 8
@@ -64,6 +62,8 @@ if __name__ == "__main__":
         query2passage[item["question"]] = item["content"]
             
     passage_list = list(set(passage_list))
+    passage_list.sort()
+    
     passage2id = {passage: idx for idx, passage in enumerate(passage_list)}
     labels = np.array(
         [[passage2id[query2passage[query]]] for query, _ in query_answer_span_list]
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         if "api" not in model_name:
             if "infgrad/very_awesome" in model_name:
                 model = SentenceTransformer(
-                    base_dir +  model_name,
+                    model_dir +  model_name,
                     trust_remote_code=True,
                     model_kwargs={
                         "torch_dtype": torch.bfloat16,  # fp16 容易计算出nan
@@ -90,7 +90,7 @@ if __name__ == "__main__":
                 ).cuda().bfloat16().eval()
             else:
                 model = SentenceTransformer(
-                    base_dir +  model_name, trust_remote_code=True, cache_folder=model_cache_dir
+                    model_dir +  model_name, trust_remote_code=True
                 )
         else:
             model = None
@@ -157,6 +157,7 @@ if __name__ == "__main__":
                 ]
                 return input_examples
 
+            # model.max_seq_length = 8192
             model.max_seq_length = 32768
             model.tokenizer.padding_side = "right"
             q_vecs = model.encode(

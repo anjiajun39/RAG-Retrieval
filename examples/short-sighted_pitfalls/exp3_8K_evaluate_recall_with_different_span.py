@@ -14,9 +14,9 @@ import torch
 def pad_content_with_samples(
     content,
     preprocessed_texts,
-    target_len=8000,
+    target_len=7000,
     mode="before",
-    allow_truncate=True,
+    tokenizer=None,
 ):
     """
     拼接文本，使总长度接近 target_len（按单词数），支持三种拼接方式。
@@ -26,44 +26,35 @@ def pad_content_with_samples(
         content (str): 原始文本内容。
         preprocessed_texts (List[Tuple[str, int]]): 已处理好的 (text, word_count) 对。
         target_len (int): 目标总词数。
-        mode (str|None): content 所在位置，可选值为"before","middle", "after"。
-        allow_truncate (bool): 是否允许截断最后一个片段以填满目标长度。
+        mode (str): content 所在位置，可选值为 "before", "middle", "after"。
+        tokenizer: 分词器，如果提供则使用分词器计算长度，否则按空格分割计算长度。
 
     Returns:
         str: 拼接好的文本字符串。
     """
-    content_words = content.split()
-    content_len = len(content_words)
+    # 验证 mode 参数
+    if mode not in ["before", "middle", "after"]:
+        raise ValueError("mode 参数必须是 'before', 'middle' 或 'after'")
+
+    if tokenizer:
+        content_len = len(tokenizer.tokenize(content))
+    else:
+        content_len = len(content.split())
     remaining_len = target_len - content_len
     if remaining_len <= 0:
         return content
 
-
-    # 用于去重文本块
-    used_texts = set()
-
     def collect_samples(target_words):
         total = 0
         samples = []
-        for text, count in preprocessed_texts:
-            if text in used_texts:
-                continue
-
+        # 避免 ValueError 异常
+        sample_size = min(len(preprocessed_texts), 100)
+        for text, count in random.sample(preprocessed_texts, sample_size):
             # 如果整个文本块加入后不会超过目标词数，则直接添加
             if total + count <= target_words:
                 samples.append(text)
                 total += count
-                used_texts.add(text)
-            # 如果允许截断且当前总词数不足，则截取部分单词
-            elif allow_truncate and total < target_words:
-                take = target_words - total
-                words = text.split()
-                partial = ' '.join(words[:take])
-                samples.append(partial)
-                total += take
-                break
-
-            if total >= target_words:
+            else:
                 break
         return samples
 
@@ -91,29 +82,41 @@ def find_topk_by_vecs(source_vecs: np.ndarray, target_vecs: np.ndarray, topk: in
 
 if __name__ == "__main__":
     import sys
+    from transformers import AutoTokenizer
+
+    data_dir = "/processing_data/search/zengziyang/data/"
+    model_dir = "/processing_data/search/zengziyang/models/"
     
-    text_list = []
-    parquet_data = pl.read_parquet("fineweb-edu/000_00000.parquet").rows(named=True)
-    for document in tqdm.tqdm(parquet_data):
-        if 512 <= len(document["text"].split()) <= 2048:
-            text_list.append(document["text"])
-
-    print(len(text_list))
-    preprocessed_texts = [(t, len(t.split())) for t in text_list]
-
-    data_cache_dir = ""
-    model_cache_dir = ""
+    # model_name = "nvidia/NV-Embed-v2"
+    model_name = sys.argv[1]
+    model_name = model_dir + model_name
 
     base_dir = ""
-    batch_size = 5
+    batch_size = 1
     
+    tokenizer = AutoTokenizer.from_pretrained(model_dir + "nvidia/NV-Embed-v2")
     
-    model_name = "nvidia/NV-Embed-v2"
-    # model_name = sys.argv[1]
+    text_set = set()
+    parquet_data = pl.read_parquet(data_dir + "fineweb-edu/000_00000.parquet").rows(named=True)
+    for document in tqdm.tqdm(parquet_data):
+        if 512 <= len(document["text"].split()) <= 2048:
+            text_set.add(document["text"])
+    text_set = list(text_set)
+    import multiprocessing
+
+    with multiprocessing.Pool() as pool:
+        text_lens = [len(ids["input_ids"]) for ids in pool.map(tokenizer, text_set)]
     
-    data_base_dir = "examples/short-sighted_pitfalls/"
-    train_data_path = data_base_dir + "exp3_qp_train.jsonl"
-    test_data_path = data_base_dir + "exp3_qp_test.jsonl"
+    text_lens = {p: l for p, l in zip(text_set, text_lens)}
+    text_set = set([p for p in text_set if 500 <= text_lens[p] <= 2000])
+
+    print("number of all texts from fineweb-edu/000_00000.parquet", len(text_set))
+    
+    preprocessed_texts = [(p, text_lens[p]) for p in text_set]
+
+    
+    train_data_path = "exp3_qp_train.jsonl"
+    test_data_path = "exp3_qp_test.jsonl"
 
     topk_list = [1, 5, 10, 20, 30, 50]
 
@@ -164,7 +167,7 @@ if __name__ == "__main__":
             pool = model.start_multi_process_pool()
         else:
             model = SentenceTransformer(
-                model_name, trust_remote_code=True, cache_folder=model_cache_dir
+                model_name, trust_remote_code=True, cache_folder=None
             )
             pool = model.start_multi_process_pool()
     else:
@@ -173,17 +176,17 @@ if __name__ == "__main__":
         pool = None
     
     for mode in ["before", "middle", "after"]:
-        passage_list_file = data_base_dir + f"exp3_8K_passages_{mode}.json"
+        passage_list_file = f"exp3_8K_passages_{mode}.json"
         if os.path.exists(passage_list_file):
             print(f"loading {passage_list_file} ...")
             with open(passage_list_file) as f:
                 passage_list = json.load(f)
         else:
             print(f"generating {passage_list_file} ...")
-            passage_list = [pad_content_with_samples(p, preprocessed_texts, mode=mode, target_len=8000) for p in raw_passage_list]
+            passage_list = [pad_content_with_samples(p, preprocessed_texts, mode=mode, target_len=7000, tokenizer=tokenizer) for p in raw_passage_list]
             with open(passage_list_file, "w") as f:
                 json.dump(passage_list, f, ensure_ascii=False)
-
+                
         # get q,p vecs
         if "jina-embeddings-v3" in model_name:
             model.max_seq_length = 8192

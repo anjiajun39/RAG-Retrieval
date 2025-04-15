@@ -33,7 +33,10 @@ class OpenAIEncoder(CommercialEncoder):
 
         # text-embedding-3-small, 1536d, 8191 tokens
         # text-embedding-3-large, 3072d, 8191 tokens
-        self.client = OpenAI()
+        self.client = OpenAI(
+            base_url="https://api.openai-proxy.org/v1",
+            api_key="sk-opludnyiKaU0Zr1gGiF4wOe8PC5h8XZYHkPB7xsc8xV1f3eb"
+        )
 
     def encode(
         self,
@@ -158,7 +161,7 @@ class VoyageEncoder(CommercialEncoder):
         import voyageai
 
         # voyage-3-m-exp, 2048d(MRL defalut 1024d), 32k tokens, 6918M
-        self.client = voyageai.Client()
+        self.client = voyageai.Client(api_key="pa-m3deVMzcX_DKsE1D2kEgpYEM3Ote5RKmBJQLZLUG_cN")
 
     def encode(
         self,
