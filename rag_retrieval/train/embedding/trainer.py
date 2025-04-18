@@ -100,6 +100,7 @@ class Trainer:
                         self.model,
                         self.validation_dataloader,
                         self.validation_loss_tracker,
+                        self.accelerator,
                     )
                     validation_metrics = self.add_prefix({'loss': validation_loss, 'accuracy': acc}, 'validation')
                     self.accelerator.print(f'Step {self.current_step} Validation loss: {validation_loss:.6f} Accuracy: {acc:.6f}')
@@ -128,6 +129,7 @@ class Trainer:
                     self.model,
                     self.validation_dataloader,
                     self.validation_loss_tracker,
+                    self.accelerator,
                 )
                 validation_metrics = self.add_prefix({'loss': validation_loss, 'accuracy': acc}, 'validation')
                 self.accelerator.print(f'Epoch {current_epoch} Validation loss: {validation_loss:.6f} Accuracy: {acc:.6f}')
@@ -195,7 +197,7 @@ def evaluate(
     accuracy = 0
     for batch in dataloader:
         with torch.inference_mode():
-            batch_output = model(**batch, accelerator=self.accelerator)
+            batch_output = model(**batch, accelerator=accelerator)
             loss_tracker.update(batch_output['loss'])
             if 'accuracy' in batch_output:
                 accuracy += batch_output['accuracy']
