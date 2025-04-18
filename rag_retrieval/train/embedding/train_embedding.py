@@ -35,6 +35,7 @@ def create_adamw_optimizer(
 
 
 def parse_args():
+    import yaml
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str)
