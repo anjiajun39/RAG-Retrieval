@@ -65,7 +65,7 @@ class Trainer:
                 with self.accelerator.accumulate(self.model):
                     self.optimizer.zero_grad()
                 
-                    batch_output=self.model(**batch)
+                    batch_output=self.model(**batch,accelerator=self.accelerator)
                     loss = batch_output['loss']
 
                     self.accelerator.backward(loss)
@@ -195,7 +195,7 @@ def evaluate(
     accuracy = 0
     for batch in dataloader:
         with torch.inference_mode():
-            batch_output = model(**batch, accelerator=accelerator)
+            batch_output = model(**batch, accelerator=self.accelerator)
             loss_tracker.update(batch_output['loss'])
             if 'accuracy' in batch_output:
                 accuracy += batch_output['accuracy']
