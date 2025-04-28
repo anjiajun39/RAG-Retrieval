@@ -220,7 +220,7 @@ def main():
     save_dir = args.output_dir + '/model'
 
     unwrapped_model = accelerator.unwrap_model(model)
-    unwrapped_model.save_pretrained(save_dir, safe_serialization=True, accelerator=accelerator)
+    unwrapped_model.save_pretrained(save_dir, safe_serialization=False)
     tokenizer.save_pretrained(save_dir)
 
 
