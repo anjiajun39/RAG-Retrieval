@@ -140,15 +140,10 @@ class Trainer:
 
                 if self.accelerator.is_main_process:
                     save_dir=self.get_checkpoint_dir(current_epoch)
-                    print(save_dir)
-
                     unwrapped_model = self.accelerator.unwrap_model(self.model)
                     unwrapped_model.save_pretrained(save_dir,
-                                                    safe_serialization=True,
-                                                    accelerator=self.accelerator)
-                    # self.accelerator.save_model(self.model, save_dir)
+                                                    safe_serialization=False)
                     self.tokenizer.save_pretrained(save_dir)
-                    # self.accelerator.save_model(self.model, save_dir)
                 self.accelerator.wait_for_everyone()
 
 
