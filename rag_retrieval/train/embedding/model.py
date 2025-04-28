@@ -302,12 +302,8 @@ class Embedding(nn.Module):
         self,
         save_dir,
         safe_serialization = False,
-        accelerator=None
     ):
-        if accelerator is None:
-            self.model.save(save_dir, safe_serialization=safe_serialization)
-        else:
-            accelerator.save_model(self.model, save_dir, safe_serialization=safe_serialization)
+        self.model.save(save_dir, safe_serialization=safe_serialization)
 
     @classmethod
     def from_pretrained(
