@@ -27,17 +27,41 @@ pip install -r requirements.txt
 
 ### 单点数据加载
 
-单点数据集标准格式，示例见 [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl)：
+单点数据集标准格式，示例见 [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl)
 ```
-{"query": str, "content": str, "label": xx}
+{"query": str, "content": str, "label": int|float}
 ```
 - `content` 是 query 所对应的文档实际内容。
-- `label` 表示通过人工标注（多级相关性标签: 0/1/2/..）或教师模型打分（0-1 之间的连续值分数）所分配的相关性标签，作为模型微调的监督信号。
+- `label` 是模型微调的监督信号，有两种类型：
+  - 连续型：0-1 之间的连续值分数
+  - 离散型：多级相关性标签（0/1/2/...），数据加载模块会将其均匀放缩成 0-1 区间的连续值。
 
+> 当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。
+> 例如数据集中存在三级标签（0，1，2），经过放缩后，得到：{ label 0: 0，label 1: 0.5，label 2: 1 }。
 
-该配置下支持均方损失 `MSE` 和二分类交叉熵损失 `Binary Cross Entropy`，优化目标为单点 query-content 的绝对相关性判断。当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。例如数据集中存在三级标签（0，1，2），经过放缩后，得到{ label 0: 0，label 1: 0.5，label 2: 1}。在预测时，模型最终的预测分数为模型输出的 logit，后续可以经过 sigmoid 归一化为 0-1 区间。用户可以利用 LLM 来得到相关性标签以进行蒸馏，在 [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) 目录下可以找到用 LLM 进行相关性打分标注的示例代码。
+该配置下支持两种损失函数：
+- 均方误差损失（MSE）：
 
-完整配置信息如下：
+```math
+\mathrm{MSE}=\frac{1}{N} \sum_{i=1}^{N}\left(y_{i}-\hat{y}_{i}\right)^{2}
+```
+- 二分类交叉熵损失（Binary Cross Entropy, BCE）：
+
+```math
+\mathrm{BCE}=-\frac{1}{N} \sum_{i=1}^{N}\left(y_{i} \log \left(\hat{y}_{i}\right)+\left(1-y_{i}\right) \log \left(1-\hat{y}_{i}\right)\right)
+```
+
+```math
+\mathrm{sigmoid}(x)=\frac{1}{1+e^{-x}}
+```
+
+其中，$`y_{i}`$ 是 0-1 区间的真实相关性标签，$`\hat{y}_i`$ 是模型输出 logit 经过 sigmoid 归一化的结果，$`N`$ 为总体数据集的大小。
+
+整体优化目标为单点 query-content 的绝对相关性判断。
+
+值得一提的是，用户可以利用 LLM 来得到连续型的相关性标签以进行蒸馏，在 [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) 目录下可以找到相关示例代码。
+
+✅ 示例配置信息如下：
 ```
 train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
 train_dataset_type: "pointwise"
@@ -52,18 +76,59 @@ loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 
 ### 分组数据加载
 
-分组数据集标准格式，示例见 [grouped_reranker_train_data_pointwise_label.jsonl](../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl) & [grouped_reranker_train_data_listwise_label.jsonl](../../../example_data/grouped_reranker_train_data_listwise_label.jsonl)：
-```
-{"query": str, "hits": [{"content": xxx, "label": xxx}, ...]}
-```
-- `hits` 为 query 下所有的文档样本，content 是文档实际内容。
-- `label` 表示通过人工标注（多级相关性标签: 0/1/2/..）或教师模型打分（不局限于0-1 之间的连续值分数，可以是一个列表式相对排序）所分配的相关性标签，作为模型微调的监督信号。示例数据如上所示。
+分组数据集标准格式，示例见 [grouped_reranker_train_data_pointwise_label.jsonl](../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl) & [grouped_reranker_train_data_listwise_label.jsonl](../../../example_data/grouped_reranker_train_data_listwise_label.jsonl)
 
-该配置下支持成对损失 `Pairwise RankNet Loss` 和交叉熵损失 `Listwise Cross Entropy`，优化目标为 query-list[content] 的相对相关性判断。`train_group_size` 指的是针对每个 query需要同时考虑多少个文档的相对相关性。如果原始文档数目数量不足，则我们会进行重复采样来达到 `train_group_size` 的数目。
+> 示例中分组内部的 pointwise_label 代表监督信号来自单点评估，listwise_label 代表监督信号来自列表排序评估，例如 RankGPT。
 
-完整配置信息如下：
+
 ```
-train_dataset: "../../../example_data/grouped_reranker_train_data.jsonl"
+{"query": str, "hits": [{"content": str, "label": int|float}, ...]}
+```
+- `hits` 为 query 对应的所有文档样本，content 是文档的实际内容。
+- `label` 是模型微调的监督信号，可以有两种类型：
+  - 连续型：0-1 之间的连续值分数
+  - 离散型：多级相关性标签（0/1/2/...）
+
+该配置下支持两种损失函数：
+
+**成对排名损失（Pairwise RankNet Loss）：**
+
+```math
+\mathcal{L}_\mathrm{RankNet}= \sum_{i=1}^M\sum_{j=1}^M \mathbb{1}_{r_{i} < r_{j} } \log(1 + \exp(s_i-s_j))
+```
+
+  - $M$ 表示某个 query 下文档的总数。
+  - $r_i$ 代表第 $i$ 个文档的相关性标签，它衡量了该文档与查询的真实相关程度。
+  - $s_i$ 是第 $i$ 个文档经过模型处理后输出的得分（logit），代表模型对该文档相关性的预测。
+  - $`\mathbb{1}_{r_i<r_j}`$ 是示性函数，其含义为：当 $`r_i < r_j`$ 这个条件成立时，即第 $`j`$ 个文档的相关性标签大于第 $`i`$ 个文档的相关性标签，$`\mathbb{1}_{r_i<r_j}=1`$；当 $`r_i < r_j`$ 这个条件不成立时，$`\mathbb{1}_{r_i<r_j}=0`$ 。 
+  
+  该损失函数的作用机制是：当第 $j$ 个文档的相关性比第 $i$ 个文档更高（即 $r_j > r_i$）时，从模型优化的角度期望 $s_j$ 要比 $s_i$ 更高。
+  
+  通过最小化成对排名损失函数 $\mathcal{L}_\mathrm{RankNet}$，模型会不断调整参数，使得相关性高的文档对应的 logit 值尽可能大于相关性低的文档对应的 logit 值，从而实现对文档进行合理排序的目的。 
+
+**列表排名损失（Listwise Cross Entropy Loss）：**
+```math
+\mathcal{L}_\text{Listwise CE}=-\sum_{i=1}^M\frac{\exp(r_i)}{\sum_j\exp(r_j)}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
+```
+
+- $\frac{\exp(r_i)}{\sum_j\exp(r_j)}$ 这部分计算的是真实相关性标签的概率分布，它将每个文档的真实相关性标签通过指数函数进行变换后，再进行归一化，使得所有文档的概率之和为 1，从而得到基于真实标签的概率分布。
+- $\frac{\exp(s_i)}{\sum_j\exp(s_j)}$ 则是模型预测得分的概率分布，同样是将模型输出的得分通过指数函数变换并归一化，得到基于模型预测的概率分布。 
+
+*特殊情况*：当 $r_i$ 中仅有一个标签为 1，而其他文档的标签均为 0，此时列表排名损失函数退化为标准的 InfoNCE Loss：
+```math
+\mathcal{L}_\text{Listwise CE} \Rightarrow \mathcal{L}_\text{InfoNCE}=-\sum_{i=1}^M\mathbb{1}_{r_i=1}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
+```
+
+其中，$`\mathbf{1}_{r_i=1}`$ 是示性函数，其含义为：当 $`r_i=1`$ 时，$`\mathbb{1}_{r_i=1}=1`$；当 $`r_i\neq 1`$ 时，$`\mathbb{1}_{r_i=1}=0`$ 。 
+
+该损失函数计算的是真实相关性标签概率分布与模型预测得分概率分布之间的交叉熵，而交叉熵衡量的是两个概率分布之间的差异程度：当两个分布越接近时，交叉熵的值越小。
+
+因此，通过最小化列表排名损失 $`\mathcal{L}_\text{Listwise CE}`$，模型会调整参数，使得模型预测的得分概率分布尽可能接近真实相关性标签的概率分布，从而实现对文档的合理排序。
+
+
+✅ 示例配置信息如下：
+```
+train_dataset: "../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl"
 train_dataset_type: "grouped"
 train_group_size: 10
 shuffle_rate: 0.0
@@ -72,6 +137,7 @@ val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
 val_dataset_type: "grouped"
 loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 ```
+> `train_group_size`，即为上式的`M`，指的是针对每个 query，需要同时考虑多少个文档的相对相关性。如果原始文档数目不足 `train_group_size`，则默认会进行重复采样来补齐。
 
 ## 训练
 
