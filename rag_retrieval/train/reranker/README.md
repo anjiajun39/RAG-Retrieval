@@ -19,20 +19,43 @@ After installing the dependencies, we'll use specific examples to demonstrate ho
 
 ## Data Loading
 
-We provide two dataset loading methods to support different types of loss functions:
+We offer two ways to load datasets to support different types of loss functions:
 
 ### Pointwise Data Loading
 
-The standard format for pointwise datasets is as follows. See an example in [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl):
+The standard format for a pointwise dataset. For an example, see [pointwise_reranker_train_data.jsonl](../../../example_data/pointwise_reranker_train_data.jsonl).
 ```
-{"query": str, "content": str, "label": xx}
+{"query": str, "content": str, "label": int|float}
 ```
-- `content` is the actual document content corresponding to the `query`.
-- `label` represents the relevance label assigned through either human annotation (multi-level relevance labels: 0/1/2/...) or teacher model scoring (a continuous score between 0 and 1), which serves as the supervision signal for model fine-tuning.
+- `content` is the actual content of the document corresponding to the query.
+- `label` is the supervision signal for model fine-tuning and comes in two types:
+  - Continuous: A continuous score between 0 and 1.
+  - Discrete: Multi-level relevance labels (0/1/2/...). The data loading module will uniformly scale them to a continuous value in the range of 0 to 1.
 
-This configuration supports Mean Squared Error (`MSE`) loss and Binary Cross Entropy (`BCE`) loss, with the optimization objective being the absolute relevance judgment between query and content. When relevance is represented as multi-level labels, the dataset will automatically scale these labels into the 0-1 score range using the `max_label` and `min_label` settings. For example, if the dataset contains three levels of labels (0, 1, 2), they will be scaled to `{ label 0: 0, label 1: 0.5, label 2: 1 }`. During inference, the model’s predicted score is the raw logit output, which can be normalized to the 0-1 range using a sigmoid function. Users can utilize LLMs to obtain relevance labels for distillation. Example code for LLM-based relevance annotation can be found in the directory [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker).
+> When the relevance is represented by multi-level labels, by setting `max_label` and `min_label`, the dataset will automatically scale the multi-level labels uniformly to the score range of 0 to 1.
+> For example, if there are three-level labels (0, 1, 2) in the dataset, after scaling, we get: { label 0: 0, label 1: 0.5, label 2: 1 }.
 
-Complete configuration:
+Two loss functions are supported under this configuration:
+- Mean Squared Error Loss (MSE):
+```math
+\mathrm{MSE}=\frac{1}{N} \sum_{i=1}^{N}\left(y_{i}-\hat{y}_{i}\right)^{2}
+```
+- Binary Cross Entropy Loss (BCE):
+```math
+\mathrm{BCE}=-\frac{1}{N} \sum_{i=1}^{N}\left(y_{i} \log \left(\hat{y}_{i}\right)+\left(1-y_{i}\right) \log \left(1-\hat{y}_{i}\right)\right)
+```
+
+```math
+\mathrm{sigmoid}(x)=\frac{1}{1+e^{-x}}
+```
+
+Here, $`y_{i}`$ is the true relevance label in the range of 0 to 1, $`\hat{y}_i`$ is the result of the model's output logit after sigmoid normalization, and $`N`$ is the size of the entire dataset.
+
+The overall optimization objective is to judge the absolute relevance of single-point query-content.
+
+It's worth mentioning that users can use LLMs to obtain continuous relevance labels for distillation. Relevant example code can be found in the [examples/distill_llm_to_bert_reranker](../../../examples/distill_llm_to_bert_reranker) directory.
+
+✅ Example configuration information is as follows:
 ```
 train_dataset: "../../../example_data/pointwise_reranker_train_data.jsonl"
 train_dataset_type: "pointwise"
@@ -47,18 +70,60 @@ loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
 
 ### Grouped Data Loading
 
-The standard format for grouped datasets is as follows. See examples in [grouped_reranker_train_data_pointwise_label.jsonl](../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl) & [grouped_reranker_train_data_listwise_label.jsonl](../../../example_data/grouped_reranker_train_data_listwise_label.jsonl):
-```
-{"query": str, "hits": [{"content": xxx, "label": xxx}, ...]}
-```
-- `hits` contains all document samples under a given `query`, where `content` is the actual document content.
-- `label` represents the relevance label assigned through either human annotation (multi-level relevance labels: 0/1/2/...) or teacher model scoring (not necessarily limited to a continuous score between 0 and 1, but possibly a list-based relative ranking), serving as the supervision signal for model fine-tuning.
+The standard format for a grouped dataset. For examples, see [grouped_reranker_train_data_pointwise_label.jsonl](../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl) & [grouped_reranker_train_data_listwise_label.jsonl](../../../example_data/grouped_reranker_train_data_listwise_label.jsonl).
 
-This configuration supports `Pairwise RankNet Loss` and `Listwise Cross Entropy Loss`, with the optimization objective being the relative relevance judgment among multiple documents for a given query. The parameter `train_group_size` specifies the number of documents to consider simultaneously for each query. If the number of available documents is insufficient, samples will be duplicated to meet the `train_group_size` requirement.
+> In the examples, the `pointwise_label` within a group indicates that the supervision signal comes from single-point evaluation, and `listwise_label` indicates that the supervision signal comes from list ranking evaluation, such as RankGPT.
 
-Complete configuration:
 ```
-train_dataset: "../../../example_data/grouped_reranker_train_data_listwise_label.jsonl"
+{"query": str, "hits": [{"content": str, "label": int|float}, ...]}
+```
+- `hits` contains all document samples corresponding to the query, and `content` is the actual content of the document.
+- `label` is the supervision signal for model fine-tuning and can be of two types:
+  - Continuous: A continuous score between 0 and 1.
+  - Discrete: Multi-level relevance labels (0/1/2/...).
+
+Two loss functions are supported under this configuration:
+
+**Pairwise RankNet Loss:**
+```math
+\mathcal{L}_\mathrm{RankNet}= \sum_{i=1}^M\sum_{j=1}^M \mathbb{1}_{r_{i} < r_{j} } \ |r_j-r_i|\ \log(1 + \exp(s_i-s_j))
+```
+
+  - $M$ represents the total number of documents under a certain query.
+  - $r_i$ represents the relevance label of the $i$-th document, which measures the true relevance of this document to the query.
+  - $s_i$ is the score (logit) output by the model after processing the $i$-th document, representing the model's prediction of the relevance of this document.
+  - $`\mathbb{1}_{r_i<r_j}`$ is an indicator function. Its meaning is: when the condition $`r_i < r_j`$ holds, i.e., the relevance label of the $`j`$-th document is greater than that of the $i$-th document, $`\mathbb{1}_{r_i<r_j}=1`$; when the condition $`r_i < r_j`$ does not hold, $`\mathbb{1}_{r_i<r_j}=0`$. 
+  - $`|r_j-r_i|`$ is weighting coefficient of the document pairs. The greater the difference between the true relevance labels, the more attention will be given.
+  
+  The mechanism of this loss function is as follows: When the relevance of the $`j`$-th document is higher than that of the $`i`$-th document (i.e., $`r_j > r_i`$), from the perspective of model optimization, we expect $`s_j`$ to be higher than $`s_i`$.
+  
+  By minimizing the pairwise ranking loss function $\mathcal{L}_\mathrm{RankNet}$, the model will continuously adjust its parameters so that the logit value corresponding to a highly relevant document is as large as possible compared to that of a less relevant document, thereby achieving the goal of reasonably ranking the documents. 
+
+**Listwise Cross Entropy Loss**:
+
+In a normal scenario, that is, when there is only one relevance label $r_i$ equal to 1, and the relevance labels $r_j$ of other documents are all 0, the listwise ranking loss function is the standard listwise loss:
+```math
+\mathcal{L}_\text{Listwise CE} \Rightarrow \mathcal{L}_\text{listwise}=-\sum_{i=1}^M\mathbb{1}_{r_i=1}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
+```
+
+Where, $`\mathbf{1}_{r_i=1}`$ is an indicator function, which means: when $`r_i = 1`$, $`\mathbb{1}_{r_i=1}=1`$; when $`r_i\neq 1`$, $`\mathbb{1}_{r_i=1}=0`$.
+
+Further considering the distillation scenario, that is, $r_i$ is a continuous or discrete value with dense supervision signals. At this time, the listwise ranking loss function is the distillation loss:
+
+```math
+\mathcal{L}_\text{Listwise CE}  \Rightarrow \mathcal{L}_\text{distillation} =-\sum_{i=1}^M\frac{\exp(r_i)}{\sum_j\exp(r_j)}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
+```
+
+- $\frac{\exp(r_i)}{\sum_j\exp(r_j)}$ calculates the probability distribution of the true relevance labels. It transforms each document's true relevance label through the exponential function and then normalizes it so that the sum of the probabilities of all documents is 1, thus obtaining a probability distribution based on the true labels.
+- $\frac{\exp(s_i)}{\sum_j\exp(s_j)}$ is the probability distribution of the model's predicted scores. Similarly, it transforms and normalizes the scores output by the model through the exponential function to obtain a probability distribution based on the model's predictions. 
+
+This loss function calculates the cross-entropy between the probability distribution of the true relevance labels and the probability distribution of the model's predicted scores, and the cross-entropy measures the degree of difference between the two probability distributions: the smaller the cross-entropy value is when the two distributions are closer.
+
+All in all, by minimizing the listwise ranking loss $`\mathcal{L}_\text{Listwise CE}`$, the model will adjust its parameters to make the probability distribution of the model's predicted scores as close as possible to the probability distribution of the true relevance labels, thus achieving a reasonable ranking of the documents. 
+
+✅ Example configuration information is as follows:
+```
+train_dataset: "../../../example_data/grouped_reranker_train_data_pointwise_label.jsonl"
 train_dataset_type: "grouped"
 train_group_size: 10
 shuffle_rate: 0.0
@@ -67,6 +132,7 @@ val_dataset: "../../../example_data/grouped_reranker_eval_data.jsonl"
 val_dataset_type: "grouped"
 loss_type: "pairwise_ranknet"  # "pairwise_ranknet" or "listwise_ce"
 ```
+> `train_group_size`, which is `M` in the above formula, refers to the number of documents whose relative relevance needs to be considered simultaneously for each query. If the number of original documents is less than `train_group_size`, repeated sampling will be performed by default to make up the difference.
 
 ## Training
 
