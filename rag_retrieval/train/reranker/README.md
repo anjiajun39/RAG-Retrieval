@@ -86,13 +86,14 @@ Two loss functions are supported under this configuration:
 
 **Pairwise RankNet Loss:**
 ```math
-\mathcal{L}_\mathrm{RankNet}= \sum_{i=1}^M\sum_{j=1}^M \mathbb{1}_{r_{i} < r_{j} } \log(1 + \exp(s_i-s_j))
+\mathcal{L}_\mathrm{RankNet}= \sum_{i=1}^M\sum_{j=1}^M \mathbb{1}_{r_{i} < r_{j} } \ |r_j-r_i|\ \log(1 + \exp(s_i-s_j))
 ```
 
   - $M$ represents the total number of documents under a certain query.
   - $r_i$ represents the relevance label of the $i$-th document, which measures the true relevance of this document to the query.
   - $s_i$ is the score (logit) output by the model after processing the $i$-th document, representing the model's prediction of the relevance of this document.
   - $`\mathbb{1}_{r_i<r_j}`$ is an indicator function. Its meaning is: when the condition $`r_i < r_j`$ holds, i.e., the relevance label of the $`j`$-th document is greater than that of the $i$-th document, $`\mathbb{1}_{r_i<r_j}=1`$; when the condition $`r_i < r_j`$ does not hold, $`\mathbb{1}_{r_i<r_j}=0`$. 
+  - $`|r_j-r_i|`$ is weighting coefficient of the document pairs. The greater the difference between the true relevance labels, the more attention will be given.
   
   The mechanism of this loss function is as follows: When the relevance of the $`j`$-th document is higher than that of the $`i`$-th document (i.e., $`r_j > r_i`$), from the perspective of model optimization, we expect $`s_j`$ to be higher than $`s_i`$.
   
