@@ -105,25 +105,7 @@ loss_type: "pointwise_bce"  # "pointwise_bce" or "pointwise_mse"
   该损失函数的作用机制是：当第 $j$ 个文档的相关性比第 $i$ 个文档更高（即 $r_j > r_i$）时，从模型优化的角度期望 $s_j$ 要比 $s_i$ 更高。
   
   通过最小化成对排名损失函数 $\mathcal{L}_\mathrm{RankNet}$，模型会不断调整参数，使得相关性高的文档对应的 logit 值尽可能大于相关性低的文档对应的 logit 值，从而实现对文档进行合理排序的目的。 
-
-**列表排名损失（Listwise Cross Entropy Loss）：**
-```math
-\mathcal{L}_\text{Listwise CE}=-\sum_{i=1}^M\frac{\exp(r_i)}{\sum_j\exp(r_j)}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
-```
-
-- $\frac{\exp(r_i)}{\sum_j\exp(r_j)}$ 这部分计算的是真实相关性标签的概率分布，它将每个文档的真实相关性标签通过指数函数进行变换后，再进行归一化，使得所有文档的概率之和为 1，从而得到基于真实标签的概率分布。
-- $\frac{\exp(s_i)}{\sum_j\exp(s_j)}$ 则是模型预测得分的概率分布，同样是将模型输出的得分通过指数函数变换并归一化，得到基于模型预测的概率分布。 
-
-*特殊情况*：当 $r_i$ 中仅有一个标签为 1，而其他文档的标签均为 0，此时列表排名损失函数退化为标准的 InfoNCE Loss：
-```math
-\mathcal{L}_\text{Listwise CE} \Rightarrow \mathcal{L}_\text{InfoNCE}=-\sum_{i=1}^M\mathbb{1}_{r_i=1}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
-```
-
-其中，$`\mathbf{1}_{r_i=1}`$ 是示性函数，其含义为：当 $`r_i=1`$ 时，$`\mathbb{1}_{r_i=1}=1`$；当 $`r_i\neq 1`$ 时，$`\mathbb{1}_{r_i=1}=0`$ 。 
-
-该损失函数计算的是真实相关性标签概率分布与模型预测得分概率分布之间的交叉熵，而交叉熵衡量的是两个概率分布之间的差异程度：当两个分布越接近时，交叉熵的值越小。
-
-因此，通过最小化列表排名损失 $`\mathcal{L}_\text{Listwise CE}`$，模型会调整参数，使得模型预测的得分概率分布尽可能接近真实相关性标签的概率分布，从而实现对文档的合理排序。
+ç
 
 
 ✅ 示例配置信息如下：

@@ -98,24 +98,27 @@ Two loss functions are supported under this configuration:
   
   By minimizing the pairwise ranking loss function $\mathcal{L}_\mathrm{RankNet}$, the model will continuously adjust its parameters so that the logit value corresponding to a highly relevant document is as large as possible compared to that of a less relevant document, thereby achieving the goal of reasonably ranking the documents. 
 
-**Listwise Cross Entropy Loss:**
+**Listwise Cross Entropy Loss**:
+
+In a normal scenario, that is, when there is only one relevance label $r_i$ equal to 1, and the relevance labels $r_j$ of other documents are all 0, the listwise ranking loss function is the standard listwise loss:
 ```math
-\mathcal{L}_\text{Listwise CE}=-\sum_{i=1}^M\frac{\exp(r_i)}{\sum_j\exp(r_j)}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
+\mathcal{L}_\text{Listwise CE} \Rightarrow \mathcal{L}_\text{listwise}=-\sum_{i=1}^M\mathbb{1}_{r_i=1}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
+```
+
+Where, $`\mathbf{1}_{r_i=1}`$ is an indicator function, which means: when $`r_i = 1`$, $`\mathbb{1}_{r_i=1}=1`$; when $`r_i\neq 1`$, $`\mathbb{1}_{r_i=1}=0`$.
+
+Further considering the distillation scenario, that is, $r_i$ is a continuous or discrete value with dense supervision signals. At this time, the listwise ranking loss function is the distillation loss:
+
+```math
+\mathcal{L}_\text{Listwise CE}  \Rightarrow \mathcal{L}_\text{distillation} =-\sum_{i=1}^M\frac{\exp(r_i)}{\sum_j\exp(r_j)}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
 ```
 
 - $\frac{\exp(r_i)}{\sum_j\exp(r_j)}$ calculates the probability distribution of the true relevance labels. It transforms each document's true relevance label through the exponential function and then normalizes it so that the sum of the probabilities of all documents is 1, thus obtaining a probability distribution based on the true labels.
 - $\frac{\exp(s_i)}{\sum_j\exp(s_j)}$ is the probability distribution of the model's predicted scores. Similarly, it transforms and normalizes the scores output by the model through the exponential function to obtain a probability distribution based on the model's predictions. 
 
-*Special case*: When only one label in $r_i$ is 1 and the labels of other documents are all 0, the listwise ranking loss function degenerates into the standard InfoNCE Loss:
-```math
-\mathcal{L}_\text{Listwise CE} \Rightarrow \mathcal{L}_\text{InfoNCE}=-\sum_{i=1}^M\mathbb{1}_{r_i=1}\log(\frac{\exp(s_i)}{\sum_j\exp(s_j)})
-```
+This loss function calculates the cross-entropy between the probability distribution of the true relevance labels and the probability distribution of the model's predicted scores, and the cross-entropy measures the degree of difference between the two probability distributions: the smaller the cross-entropy value is when the two distributions are closer.
 
-Here, $`\mathbf{1}_{r_i=1}`$ is an indicator function. Its meaning is: when $`r_i = 1`$, $`\mathbb{1}_{r_i=1}=1`$; when $`r_i\neq 1`$, $`\mathbb{1}_{r_i=1}=0`$. 
-
-This loss function calculates the cross-entropy between the probability distribution of the true relevance labels and the probability distribution of the model's predicted scores. Cross-entropy measures the degree of difference between two probability distributions: the closer the two distributions are, the smaller the cross-entropy value.
-
-Therefore, by minimizing the listwise ranking loss $\mathcal{L}_\text{Listwise CE}$, the model will adjust its parameters so that the probability distribution of the model's predicted scores is as close as possible to the probability distribution of the true relevance labels, thereby achieving the goal of reasonably ranking the documents.
+All in all, by minimizing the listwise ranking loss $`\mathcal{L}_\text{Listwise CE}`$, the model will adjust its parameters to make the probability distribution of the model's predicted scores as close as possible to the probability distribution of the true relevance labels, thus achieving a reasonable ranking of the documents. 
 
 ✅ Example configuration information is as follows:
 ```
