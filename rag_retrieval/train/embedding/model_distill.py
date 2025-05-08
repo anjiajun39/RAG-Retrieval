@@ -35,6 +35,7 @@ class DistillEmbedding(nn.Module):
         query_input_ids,  # [batch_size,seq_len]
         query_attention_mask,  # [batch_size,seq_len]
         teacher_embeddings=None,  # [batch_size]
+        accelerator=None,
     ):
         student_embeddings = self.get_embedding(query_input_ids, query_attention_mask)
 
