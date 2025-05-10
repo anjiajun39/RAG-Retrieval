@@ -1,9 +1,24 @@
+import os
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+import os.path
+import time
+import hashlib
 import numpy as np
 from typing import Literal
-from sentence_transformers import SentenceTransformer
+
+import tqdm
+import voyageai
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import commercial_embedding_api
 import faiss
 import torch
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+import pickle
+from FlagEmbedding import FlagReranker, FlagLLMReranker
+
+
 
 def find_topk_via_faiss(source_vecs: np.ndarray, target_vecs: np.ndarray, topk: int):
     faiss_index = faiss.IndexFlatIP(target_vecs.shape[1])
@@ -289,3 +304,233 @@ def find_topk_by_reranker(
         topk_scores: numpy array of shape (len(query_list), topk)
     """
     pass
+
+def find_topk_by_reranker(
+    reranker_model_name_or_path: str,
+    embedding_model_name_or_path: str,
+    reranker_model_type: Literal["local", "api"],
+    embedding_model_type: Literal["local", "api"],
+    query_list: list[str],
+    passage_list: list[str],
+    topk: int,
+    recall_topk: int = 100,
+    cache_path: str = "./rerank_cache.pickle",
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Find topk passages for each query using reranker.
+    支持的模型：
+    local: bge-reranker-v2-m3; jina-reranker-v2-base-multilingual; gte-multilingual-reranker-base
+    api: rerank-2
+    Args:
+        reranker_model_name_or_path: model name or path
+        embedding_model_name_or_path: model name or path for first stage retrieval
+        reranker_model_type: model type, either 'local' or 'api'
+        embedding_model_type: model type, either 'local' or 'api'
+        query_list: list of query strings
+        passage_list: list of passage strings
+        topk: number of top passages to return
+        recall_topk: number of top passages in first stage (i.e. recall)
+        cache_path: path to cache the first stage retrieval results and reranker scores. If cache path is None, do not use and save cache.
+    Returns:
+        topk_index: numpy array of shape (len(query_list), topk)
+        topk_scores: numpy array of shape (len(query_list), topk)
+    """
+    # 读取cache
+    do_cache = cache_path is not None
+    cache_di = {}
+    if do_cache:
+        recall_key = "Recall+--+{}+--+{}+--+{}+--+{}+--+{}".format(
+            embedding_model_name_or_path,
+            embedding_model_type,
+            "\n".join(sorted(query_list)),
+            "\n".join(sorted(passage_list)),
+            str(recall_topk)
+        )
+        recall_key = hashlib.md5(recall_key.encode('utf-8')).hexdigest()
+        # TODO 不做rerank的缓存，那不然逻辑太复杂了，需要针对pair对得分进行计算，除非速度慢到无法忍受，否则不做
+        rerank_key = "Rerank+--+{}+--+{}+--+{}+--+{}".format(
+            reranker_model_name_or_path,
+            reranker_model_type,
+            recall_key,
+            str(topk)
+        )
+        recall_topk_index_key, recall_topk_scores_key = f"{recall_key}_index", f"{recall_key}_scores"
+        if os.path.exists(cache_path):
+            print(f"从{cache_path}中加载缓存")
+            with open(cache_path, 'rb') as f:
+                cache_di = pickle.load(f)
+                # print("cache_di", cache_di)
+        else:
+            print(f"{cache_path}不存在，得到搜索排序结果后，会把结果存储该路径")
+    else:
+        print("cache_path 为None, 将不执行任何的cache操作！！！！！！！！！")
+    # 获取recall topk 结果 并进行相应的缓存操作
+    if do_cache and recall_topk_index_key in cache_di and recall_topk_scores_key in cache_di:
+        print(f"从缓存加载recall_topk_index和recall_topk_scores")
+        topk_index, topk_scores = cache_di[recall_topk_index_key], cache_di[recall_topk_scores_key]
+    else:
+        print("无缓存或缺少对应的key，从0开始计算recall_topk_index和recall_topk_scores")
+        topk_index, topk_scores = find_topk_by_single_vecs(
+            embedding_model_name_or_path=embedding_model_name_or_path,
+            model_type=embedding_model_type,
+            query_list=query_list,
+            passage_list=passage_list,
+            topk=recall_topk,
+        )
+        # 对缓存做操作
+        if do_cache:
+            print("把recall结果存储到缓存中")
+            cache_di[recall_topk_index_key] = topk_index
+            cache_di[recall_topk_scores_key] = topk_scores
+            with open(cache_path, "wb") as f:
+                pickle.dump(cache_di, f)
+
+    # 加载rerank 模型 并获取rerank topk 结果 并进行相应的缓存操作
+    rerank_topk_index, rerank_topk_scores = [], []
+    if reranker_model_type == "local":
+        if "bge-reranker-v2-m3" in reranker_model_name_or_path or "bce-reranker-base_v1" in reranker_model_name_or_path:
+            reranker = FlagReranker(reranker_model_name_or_path, use_fp16=True)
+            for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
+                scores = reranker.compute_score(
+                    [(query, passage_list[pid]) for pid in topk_passage_ids], normalize=True, max_length=8192, batch_size=512
+                )
+                pid_scores = list(zip(topk_passage_ids, scores))
+                pid_scores.sort(key=lambda x: x[1], reverse=True)
+                rerank_topk_index.append([item[0] for item in pid_scores][:topk])
+                rerank_topk_scores.append([item[1] for item in pid_scores][:topk])
+        elif "bge-reranker-v2-gemma" in reranker_model_name_or_path:
+            reranker = FlagLLMReranker(reranker_model_name_or_path, use_fp16=True)
+            for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
+                scores = reranker.compute_score(
+                    [(query, passage_list[pid]) for pid in topk_passage_ids], normalize=True, max_length=8192, batch_size=16
+                )
+                pid_scores = list(zip(topk_passage_ids, scores))
+                pid_scores.sort(key=lambda x: x[1], reverse=True)
+                rerank_topk_index.append([item[0] for item in pid_scores][:topk])
+                rerank_topk_scores.append([item[1] for item in pid_scores][:topk])
+        elif "jina-reranker-v2-base-multilingual" in reranker_model_name_or_path:
+            reranker = CrossEncoder(
+                reranker_model_name_or_path,
+                automodel_args={"torch_dtype": "auto"},
+                trust_remote_code=True,
+                max_length=8192,
+            )
+            reranker.model.cuda().half()
+            for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
+                scores = reranker.predict(
+                    [(query, passage_list[pid]) for pid in topk_passage_ids], convert_to_tensor=True, batch_size=512
+                ).tolist()
+                pid_scores = list(zip(topk_passage_ids, scores))
+                pid_scores.sort(key=lambda x: x[1], reverse=True)
+                rerank_topk_index.append([item[0] for item in pid_scores][:topk])
+                rerank_topk_scores.append([item[1] for item in pid_scores][:topk])
+        elif "gte-multilingual-reranker-base" in reranker_model_name_or_path:
+            BSZ = 256
+            tokenizer = AutoTokenizer.from_pretrained(reranker_model_name_or_path)
+            reranker = AutoModelForSequenceClassification.from_pretrained(
+                reranker_model_name_or_path, trust_remote_code=True,
+                torch_dtype=torch.float16
+            ).cuda()
+            reranker.eval()
+
+            with torch.no_grad():
+                for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
+                    pairs = [(query, passage_list[pid]) for pid in topk_passage_ids]
+                    scores = []
+                    for start_id in range(0, len(pairs), BSZ):
+                        inputs = tokenizer(
+                            pairs[start_id:start_id + BSZ],
+                            padding=True,
+                            truncation=True,
+                            return_tensors='pt',
+                            max_length=8190,
+                        )
+                        batch_scores = reranker(
+                            **{k: v.cuda() for k, v in inputs.items()}, return_dict=True
+                        ).logits.view(-1, ).float().cpu().numpy().tolist()
+                        scores.extend(batch_scores)
+
+                    pid_scores = list(zip(topk_passage_ids, scores))
+                    pid_scores.sort(key=lambda x: x[1], reverse=True)
+                    rerank_topk_index.append([item[0] for item in pid_scores][:topk])
+                    rerank_topk_scores.append([item[1] for item in pid_scores][:topk])
+
+    else:
+        assert reranker_model_type == "api"
+        if reranker_model_name_or_path == "rerank-2":
+            client = voyageai.Client(
+                api_key=os.environ["VOYAGE_KEY"],
+                max_retries=32
+            )
+            for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
+                documents = [passage_list[pid] for pid in topk_passage_ids]
+                resp = client.rerank(query=query, documents=documents, model=reranker_model_name_or_path, top_k=topk)
+                pid_scores = [[topk_passage_ids[r.index], r.relevance_score] for r in resp.results]
+                rerank_topk_index.append([item[0] for item in pid_scores])
+                rerank_topk_scores.append([item[1] for item in pid_scores])
+                # TODO 根据限制适当调整
+                time.sleep(1)
+
+    # 合并结果
+    return np.array(rerank_topk_index), np.array(rerank_topk_scores)
+
+
+if __name__ == "__main__":
+    query_list = ["天空为啥是蓝色的", "Organic skincare products for sensitive skin"]
+    passage_list = [
+        "Organic skincare for sensitive skin with aloe vera and chamomile.",
+        "New makeup trends focus on bold colors and innovative techniques",
+        "Bio-Hautpflege für empfindliche Haut mit Aloe Vera und Kamille",
+        "Neue Make-up-Trends setzen auf kräftige Farben und innovative Techniken",
+        "Cuidado de la piel orgánico para piel sensible con aloe vera y manzanilla",
+        "Las nuevas tendencias de maquillaje se centran en colores vivos y técnicas innovadoras",
+        "针对敏感肌专门设计的天然有机护肤产品",
+        "新的化妆趋势注重鲜艳的颜色和创新的技巧",
+        "敏感肌のために特別に設計された天然有機スキンケア製品",
+        "阳光中的蓝光被空气分子散射得比其他颜色更多",
+    ]
+    
+    #################################### Single Embedding - Test Local###############################################
+    topk_index, topk_scores = find_topk_by_single_vecs(
+        embedding_model_name_or_path="/data/zzy/models/BAAI/bge-m3",
+        model_type="local",
+        query_list=query_list,    
+        passage_list=passage_list,
+        topk=5,
+    )
+    for query, ids, scores in zip(query_list, topk_index, topk_scores):
+        for idx, score in zip(ids, scores):
+            print(query, passage_list[idx], score, sep="  <---->  ")
+    
+    #######################################  ReRanker - Test Local###################################################
+    # topk_index, topk_scores = find_topk_by_reranker(
+    #     reranker_model_name_or_path="/data/zzy/models/BAAI/bge-reranker-v2-gemma",
+    #     embedding_model_name_or_path="/data/zzy/models/BAAI/bge-m3",
+    #     reranker_model_type="local",
+    #     embedding_model_type="local",
+    #     query_list=query_list,
+    #     passage_list=passage_list,
+    #     topk=5,
+    #     recall_topk=9,
+    #     cache_path="./rerank_cache.pickle",
+    # )
+    # for query, ids, scores in zip(query_list, topk_index, topk_scores):
+    #     for idx, score in zip(ids, scores):
+    #         print(query, passage_list[idx], score, sep="  <---->  ")
+
+    #######################################   ReRanker - Test API ###################################################
+    # os.environ["VOYAGE_KEY"] = "xxx"
+    # topk_index, topk_scores = find_topk_by_reranker(
+    #     reranker_model_name_or_path="rerank-2",
+    #     embedding_model_name_or_path="/data/zzy/models/BAAI/bge-m3",
+    #     reranker_model_type="api",
+    #     embedding_model_type="local",
+    #     query_list=query_list,
+    #     passage_list=passage_list,
+    #     topk=5,
+    #     recall_topk=9,
+    #     cache_path="./rerank_cache.pickle",
+    # )
+    # for query, ids, scores in zip(query_list, topk_index, topk_scores):
+    #     for idx, score in zip(ids, scores):
+    #         print(query, passage_list[idx], score, sep="  <---->  ")

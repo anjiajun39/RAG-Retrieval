@@ -17,12 +17,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Myopic Trap Exp3")
     parser.add_argument("--data_name_or_path", type=str, required=True)
     parser.add_argument("--model_name_or_path", type=str, required=True)
+    parser.add_argument("--model_type", default="local", type=str, choices=["local", "api"])
     parser.add_argument("--first_stage_model_name_or_path", type=str, default=None)
-    parser.add_argument("--cache_path", type=str, default=None)
+    parser.add_argument("--first_stage_model_type", type=str, choices=["local", "api"])
+    parser.add_argument("--cache_path", type=str, default="./rerank_cache.pickle", help="Path to save the first stage cache for reranking.")
     parser.add_argument(
-        "--model_type", default="local", type=str, choices=["local", "api"]
+        "--reranker_sampling",
+        action="store_true",
+        help="Whether to sample the queries for reranker. Only for reranker.",
     )
-
     parser.add_argument(
         "--score_type",
         required=True,
@@ -34,7 +37,7 @@ if __name__ == "__main__":
     data_name_or_path = args.data_name_or_path
     model_name_or_path = args.model_name_or_path
     model_type = args.model_type
-    topk_list = [5, 10, 20, 30, 50]
+    topk_list = [5, 10, 20, 30, 50, 100]
 
     # load and process data
     query_answer_span_list, passage_list, query2passage = [], [], {}
@@ -47,11 +50,24 @@ if __name__ == "__main__":
         passage_list.append(item["content"])
         query2passage[item["question"]] = item["content"]
 
-    query_list = [item[0] for item in query_answer_span_list]
     passage_list = list(set(passage_list))
     passage_list.sort()
-
     passage2id = {passage: idx for idx, passage in enumerate(passage_list)}
+    
+    
+    if args.score_type == "reranker" and args.reranker_sampling:
+        print("Sampling 1w query for Reranker due to efficiency")
+        import random
+        random.seed(42)
+        random.shuffle(query_answer_span_list)
+        before_query_answer_span_list = [[query, span] for query, span in query_answer_span_list if "before" in span][: 3300]
+        middle_query_answer_span_list = [[query, span] for query, span in query_answer_span_list if "middle" in span][: 3300]
+        after_query_answer_span_list = [[query, span] for query, span in query_answer_span_list if "after" in span][: 3300]
+        query_answer_span_list = before_query_answer_span_list + middle_query_answer_span_list + after_query_answer_span_list
+    else:
+        print("Using all queries for Reranker")
+
+    query_list = [item[0] for item in query_answer_span_list]
     labels = np.array(
         [[passage2id[query2passage[query]]] for query, _ in query_answer_span_list]
     )
@@ -89,13 +105,15 @@ if __name__ == "__main__":
         )
     elif args.score_type == "reranker":
         topk_index, topk_scores = find_topk_by_reranker(
-            model_name_or_path,
-            args.first_stage_model_name_or_path,
-            model_type,
-            query_list,
-            passage_list,
-            max(topk_list),
-            args.cache_path,
+            reranker_model_name_or_path=model_name_or_path,
+            embedding_model_name_or_path=args.first_stage_model_name_or_path,
+            reranker_model_type=args.model_type,
+            embedding_model_type=args.first_stage_model_type,
+            query_list=query_list,
+            passage_list=passage_list,
+            topk=max(topk_list),
+            recall_topk=max(topk_list),
+            cache_path=args.cache_path,
         )
     print("Search Topk Done.")
     print(f"Result shape: {topk_scores.shape}")
@@ -120,8 +138,8 @@ if __name__ == "__main__":
             )
             ndcg_at_k_list.append(
                 ndcg_score(
-                    y_true=topk_index[selected_ids, :topk] == labels[selected_ids, :],
-                    y_score=topk_scores[selected_ids, :topk],
+                    y_true=topk_index[selected_ids, :] == labels[selected_ids, :],
+                    y_score=topk_scores[selected_ids, :],
                     k=topk,
                 )
             )
