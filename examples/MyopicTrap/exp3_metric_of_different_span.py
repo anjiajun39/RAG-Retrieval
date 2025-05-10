@@ -131,6 +131,8 @@ if __name__ == "__main__":
             for idx, answer_span in enumerate(answer_span_list)
             if span in answer_span
         ]
+        if len(selected_ids) == 0:
+            continue
         for topk in topk_list:
             recall_at_k_list.append(
                 (topk_index[selected_ids, :topk] == labels[selected_ids, :]).sum()

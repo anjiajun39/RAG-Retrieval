@@ -135,6 +135,8 @@ if __name__ == "__main__":
             for idx, answer_start in enumerate(answer_start_list)
             if min_len <= answer_start <= max_len
         ]
+        if len(selected_ids) == 0:
+            continue
         for topk in topk_list:
             recall_at_k_list.append(
                 (topk_index[selected_ids, :topk] == labels[selected_ids, :]).sum()
