@@ -8,6 +8,7 @@ from utils import (
     find_topk_by_single_vecs,
     find_topk_by_multi_vecs,
     find_topk_by_reranker,
+    find_topk_by_bm25
 )
 from sklearn.metrics import ndcg_score
 
@@ -18,21 +19,21 @@ if __name__ == "__main__":
     # 创建 ArgumentParser 对象
     parser = argparse.ArgumentParser(description="Myopic Trap Exp1")
     parser.add_argument("--data_name_or_path", type=str, required=True)
-    parser.add_argument("--model_name_or_path", type=str, required=True)
+    parser.add_argument("--model_name_or_path", type=str, default=None)
     parser.add_argument("--model_type", default="local", type=str, choices=["local", "api"])
     parser.add_argument("--first_stage_model_name_or_path", type=str, default=None)
-    parser.add_argument("--first_stage_model_type", type=str, choices=["local", "api"])
+    parser.add_argument("--first_stage_model_type", default="local", type=str, choices=["local", "api"])
     parser.add_argument("--cache_path", type=str, default="./rerank_cache.pickle", help="Path to save the first stage cache for reranking.")
     parser.add_argument(
-        "--reranker_sampling",
+        "--query_sampling",
         action="store_true",
-        help="Whether to sample the queries for reranker. Only for reranker.",
+        help="Whether to sample the queries for evaluation.",
     )
     parser.add_argument(
         "--score_type",
         required=True,
         type=str,
-        choices=["single_vec", "multi_vec", "reranker"],
+        choices=["bm25", "single_vec", "multi_vec", "reranker"],
     )
 
     args = parser.parse_args()
@@ -79,7 +80,6 @@ if __name__ == "__main__":
     answer_start_list = [answer_start for _, answer_start in query_answer_start_list]
 
     
-    
     print("Data Statistics:")
     print(f"data_name_or_path: {data_name_or_path}")
     print("min(answer_start_list)", min(answer_start_list))
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     
     
     print("Searching Topk ...")
-    print(f"Using: {model_name_or_path} {model_type} {args.score_type}")
+    print(f"Using {args.score_type} {model_type} {model_name_or_path} ")
     if args.score_type == "single_vec":
         topk_index, topk_scores = find_topk_by_single_vecs(
             model_name_or_path, model_type, query_list, passage_list, max(topk_list)
@@ -111,6 +111,12 @@ if __name__ == "__main__":
             topk=max(topk_list),
             recall_topk=max(topk_list),
             cache_path=args.cache_path,
+        )
+    elif args.score_type == "bm25":
+        topk_index, topk_scores = find_topk_by_bm25(
+            query_list=query_list,
+            passage_list=passage_list,
+            topk=max(topk_list),
         )
     print("Search Topk Done.")
     print(f"Result shape: {topk_scores.shape}")

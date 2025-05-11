@@ -6,7 +6,6 @@ import time
 import hashlib
 import numpy as np
 from typing import Literal
-
 import tqdm
 import voyageai
 from sentence_transformers import SentenceTransformer, CrossEncoder
@@ -14,7 +13,8 @@ import commercial_embedding_api
 import faiss
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
+import bm25s
+import Stemmer
 import pickle
 from FlagEmbedding import FlagReranker, FlagLLMReranker
 
@@ -24,6 +24,27 @@ def find_topk_via_faiss(source_vecs: np.ndarray, target_vecs: np.ndarray, topk: 
     faiss_index = faiss.IndexFlatIP(target_vecs.shape[1])
     faiss_index.add(target_vecs)
     res_distance, res_index = faiss_index.search(source_vecs, topk)
+    return res_index, res_distance
+
+
+def find_topk_by_bm25(
+    query_list: list[str],
+    passage_list: list[str],
+    topk: int,
+):
+    stemmer = Stemmer.Stemmer("english")
+    # Tokenize the corpus and only keep the ids (faster and saves memory)
+    corpus_tokens = bm25s.tokenize(passage_list, stopwords="en", stemmer=stemmer)
+    # Create the BM25 model and index the corpus
+    retriever = bm25s.BM25()
+    retriever.index(corpus_tokens)
+    
+    # Query the corpus
+    query_tokens = bm25s.tokenize(query_list, stemmer=stemmer)
+    # Get top-k results as a tuple of (doc ids, scores). Both are arrays of shape (n_queries, k).
+    # To return docs instead of IDs, set the `corpus=corpus` parameter.
+    res_index, res_distance = retriever.retrieve(query_tokens, k=topk)
+    
     return res_index, res_distance
 
 def find_topk_by_single_vecs(
@@ -475,24 +496,25 @@ def find_topk_by_reranker(
 
 
 if __name__ == "__main__":
-    query_list = ["天空为啥是蓝色的", "Organic skincare products for sensitive skin"]
+    query_list = [
+        "What is machine learning?",
+        "How does natural language processing work?",
+    ]
     passage_list = [
-        "Organic skincare for sensitive skin with aloe vera and chamomile.",
-        "New makeup trends focus on bold colors and innovative techniques",
-        "Bio-Hautpflege für empfindliche Haut mit Aloe Vera und Kamille",
-        "Neue Make-up-Trends setzen auf kräftige Farben und innovative Techniken",
-        "Cuidado de la piel orgánico para piel sensible con aloe vera y manzanilla",
-        "Las nuevas tendencias de maquillaje se centran en colores vivos y técnicas innovadoras",
-        "针对敏感肌专门设计的天然有机护肤产品",
-        "新的化妆趋势注重鲜艳的颜色和创新的技巧",
-        "敏感肌のために特別に設計された天然有機スキンケア製品",
-        "阳光中的蓝光被空气分子散射得比其他颜色更多",
+        "Machine learning is a subset of artificial intelligence that focuses on the development of algorithms allowing computers to learn from and make predictions on data. It involves training models on historical data to identify patterns and make informed decisions without explicit programming.",
+        "Natural language processing (NLP) enables computers to understand, interpret, and generate human language in valuable and meaningful ways. It combines computational linguistics—rule-based modeling of human language—with statistical, machine learning, and deep learning models.",
+        "Neural networks are a series of algorithms that mimic the operations of a human brain to recognize relationships between vast amounts of data. They are composed of layers of interconnected nodes (neurons) that process information through a system of inputs and outputs.",
+        "Computer vision is a field of artificial intelligence that trains computers to interpret and understand the visual world. Using digital images from cameras and videos and deep learning models, machines can accurately identify and classify objects and then react to what they 'see'.",
+        "Supervised learning uses labeled data to train algorithms to map inputs to outputs. Unsupervised learning, in contrast, deals with unlabeled data to find hidden patterns or groupings within the data. Both are fundamental to machine learning but serve different purposes.",
+        "A convolutional neural network (CNN) is a type of deep learning model specifically designed for processing grid-like data such as images. CNNs use convolutional layers to automatically extract features from images, reducing the need for manual feature engineering.",
+        "The transformer architecture is a deep learning model that relies entirely on self-attention mechanisms to process sequences. Unlike recurrent neural networks, transformers can process entire sequences in parallel, making them more efficient for tasks like machine translation and text generation.",
+        "Reinforcement learning is a type of machine learning where an agent learns to make decisions by interacting with an environment. The agent receives rewards or penalties for actions taken, aiming to maximize cumulative rewards over time through trial and error.",
+        "Recommendation systems are software tools and techniques providing suggestions for items that are most pertinent to a particular user. Key components include user profiling, item representation, similarity computation, and ranking algorithms to deliver personalized content.",
+        "Generative adversarial networks (GANs) consist of two neural networks—generators and discriminators—that compete against each other. The generator creates synthetic data, while the discriminator evaluates its authenticity. This adversarial process improves the generator's ability to produce realistic data."
     ]
     
-    #################################### Single Embedding - Test Local###############################################
-    topk_index, topk_scores = find_topk_by_single_vecs(
-        embedding_model_name_or_path="/data/zzy/models/BAAI/bge-m3",
-        model_type="local",
+    #################################### BM25 ###############################################
+    topk_index, topk_scores = find_topk_by_bm25(
         query_list=query_list,    
         passage_list=passage_list,
         topk=5,
@@ -500,6 +522,18 @@ if __name__ == "__main__":
     for query, ids, scores in zip(query_list, topk_index, topk_scores):
         for idx, score in zip(ids, scores):
             print(query, passage_list[idx], score, sep="  <---->  ")
+    
+    #################################### Single Embedding - Test Local###############################################
+    # topk_index, topk_scores = find_topk_by_single_vecs(
+    #     embedding_model_name_or_path="/data/zzy/models/BAAI/bge-m3",
+    #     model_type="local",
+    #     query_list=query_list,    
+    #     passage_list=passage_list,
+    #     topk=5,
+    # )
+    # for query, ids, scores in zip(query_list, topk_index, topk_scores):
+    #     for idx, score in zip(ids, scores):
+    #         print(query, passage_list[idx], score, sep="  <---->  ")
     
     #######################################  ReRanker - Test Local###################################################
     # topk_index, topk_scores = find_topk_by_reranker(
