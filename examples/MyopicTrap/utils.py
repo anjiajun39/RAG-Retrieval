@@ -16,9 +16,45 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import bm25s
 import Stemmer
 import pickle
-from FlagEmbedding import FlagReranker, FlagLLMReranker
+from FlagEmbedding import FlagReranker, FlagLLMReranker, BGEM3FlagModel
+import heapq
 
+def compute_colbert_score(q_reps, p_reps, q_mask=None):
+    """Compute the colbert score.
 
+    Args:
+        q_reps (torch.Tensor): Query representations.
+        p_reps (torch.Tensor): Passage representations.
+
+    Returns:
+        torch.Tensor: The computed colber scores (optional, adjusted by temperature).
+    """
+    token_scores = torch.einsum('qin,pjn->qipj', q_reps, p_reps)
+    scores, _ = token_scores.max(-1)
+    scores = scores.sum(1) / q_mask.sum(-1, keepdim=True)
+    return scores
+
+def convert_numpy_to_tensor(output_1):
+    '''
+        假设 arrays_list 是包含多个 [token_num, dim] 数组的列表 [[2,128],[3,128],[4,128]]
+        padding 后[3,4,128]
+    '''
+    import torch
+    from torch.nn.utils.rnn import pad_sequence
+    # arrays_list = [torch.randn(n, 128) for n in [2, 3, 4]]  # 示例数据
+    # 将所有数组转换为张量（如果尚未转换）
+    tensors = [torch.from_numpy(tensor) for tensor in output_1]
+
+    # 填充并合并张量
+    padded_tensor = pad_sequence(tensors, batch_first=True, padding_value=0)
+
+    # 生成掩码
+    lengths = [tensor.size(0) for tensor in tensors]  # 各数组原始长度
+    max_length = padded_tensor.size(1)  # 最大长度
+    mask = torch.arange(max_length).expand(len(lengths), max_length) < torch.tensor(lengths).unsqueeze(1)
+    mask = mask.to(padded_tensor.dtype)  # 转换为与张量相同的数据类型
+    
+    return padded_tensor.to("cuda"), mask.to("cuda")
 
 def find_topk_via_faiss(source_vecs: np.ndarray, target_vecs: np.ndarray, topk: int):
     faiss_index = faiss.IndexFlatIP(target_vecs.shape[1])
@@ -31,7 +67,7 @@ def find_topk_by_bm25(
     query_list: list[str],
     passage_list: list[str],
     topk: int,
-):
+) -> tuple[np.ndarray, np.ndarray]:
     stemmer = Stemmer.Stemmer("english")
     # Tokenize the corpus and only keep the ids (faster and saves memory)
     corpus_tokens = bm25s.tokenize(passage_list, stopwords="en", stemmer=stemmer)
@@ -286,7 +322,7 @@ def find_topk_by_multi_vecs(
     query_list: list[str],
     passage_list: list[str],
     topk: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Find topk passages for each query using multiple vectors.
     Args:
@@ -299,7 +335,109 @@ def find_topk_by_multi_vecs(
         topk_index: numpy array of shape (len(query_list), topk)
         topk_scores: numpy array of shape (len(query_list), topk)
     """
-    pass
+    #基本思路：
+    #1.先计算好query的所有embedidng。
+    #2.再分batch_size计算 doc embedidng。
+    #3.再计算的过程中，维护每个query的一个最小堆，
+    
+    batch_size = 64
+    query_batch_size = 50
+    corpus_batch_size = 768
+
+    if "bge-m3" in embedding_model_name_or_path:
+        model = BGEM3FlagModel(embedding_model_name_or_path, use_fp16=True)
+
+        query_ids = [i for i in range(len(query_list))]
+        passage_ids = [ i for i in range(len(passage_list))]
+        result_heaps = {
+            qid: [] for qid in query_ids
+        }  # Keep only the top-k docs for each query
+
+        query_embedding = model.encode(
+            query_list,
+            batch_size=batch_size,
+            max_length=8196,
+            return_dense=False,
+            return_sparse=False,
+            return_colbert_vecs=True)['colbert_vecs']
+        query_embedding,query_embedding_mask = convert_numpy_to_tensor(query_embedding)
+
+        print("合并后的张量形状:", query_embedding.shape)
+
+        query_itr = range(0, len(query_ids), query_batch_size)
+
+        itr = range(0, len(passage_list), corpus_batch_size)
+
+        for batch_num, corpus_start_idx in tqdm.tqdm(enumerate(itr)):
+            print(f"Encoding Batch {batch_num + 1}/{len(itr)}...")
+            corpus_end_idx = min(corpus_start_idx + corpus_batch_size, len(passage_list))
+            
+            sub_corpus_embeddings = model.encode(
+                passage_list[corpus_start_idx:corpus_end_idx],  # type: ignore
+                batch_size=batch_size,
+                max_length=8196,
+                return_dense=False,
+                return_sparse=False,
+                return_colbert_vecs=True)['colbert_vecs']
+            sub_corpus_embeddings,sub_corpus_embeddings_mask = convert_numpy_to_tensor(sub_corpus_embeddings)
+            #[query_all_num,sub_corpus_num]
+
+            similarity_scores = []
+
+            for query_start_idx in tqdm.tqdm(range(0, len(query_ids), query_batch_size)):
+                query_end_idx = min(query_start_idx + query_batch_size, len(query_ids))
+
+                sub_query_embedding = query_embedding[query_start_idx:query_end_idx]
+                sub_query_embedding_mask = query_embedding_mask[query_start_idx:query_end_idx]
+
+                sub_similarity_scores = compute_colbert_score(sub_query_embedding, sub_corpus_embeddings, sub_query_embedding_mask)
+                similarity_scores.append(sub_similarity_scores)
+            
+            similarity_scores = torch.cat(similarity_scores, dim=0)
+
+            # Get top-k values
+            similarity_scores_top_k_values, similarity_scores_top_k_idx = torch.topk(
+                similarity_scores,
+                min(
+                    topk + 1,similarity_scores.size(1)
+                ),
+                dim=1,
+                largest=True,
+                sorted=True
+            )
+            similarity_scores_top_k_values = (
+                similarity_scores_top_k_values.cpu().tolist()
+            )
+            similarity_scores_top_k_idx = similarity_scores_top_k_idx.cpu().tolist()
+
+            for query_itr in range(len(query_ids)):
+                query_id = query_ids[query_itr]
+                for sub_corpus_id, score in zip(
+                    similarity_scores_top_k_idx[query_itr],
+                    similarity_scores_top_k_values[query_itr],
+                ):
+                    corpus_id = passage_ids[corpus_start_idx + sub_corpus_id]
+                    if len(result_heaps[query_id]) < topk:
+                        # Push item on the heap
+                        heapq.heappush(result_heaps[query_id], (score, corpus_id))
+                    else:
+                        # If item is larger than the smallest in the heap, push it on the heap then pop the smallest element
+                        heapq.heappushpop(result_heaps[query_id], (score, corpus_id))
+
+        # 准备最终结果并排序
+        topk_index = np.zeros((len(query_ids), topk), dtype=int)
+        topk_scores = np.zeros((len(query_ids), topk), dtype=float)
+        
+        for qid in result_heaps:
+            # 从堆中获取并排序结果
+            sorted_results = sorted(result_heaps[qid], key=lambda x: (-x[0], x[1]))
+            topk_index[qid] = [corpus_id for score, corpus_id in sorted_results][:topk]
+            topk_scores[qid] = [score for score, corpus_id in sorted_results][:topk]
+        
+    else:
+        raise Exception(f"Unsupported model: {embedding_model_name_or_path}")
+        
+    return topk_index, topk_scores
 
 def find_topk_by_reranker(
     reranker_model_name_or_path: str,
@@ -514,14 +652,14 @@ if __name__ == "__main__":
     ]
     
     #################################### BM25 ###############################################
-    topk_index, topk_scores = find_topk_by_bm25(
-        query_list=query_list,    
-        passage_list=passage_list,
-        topk=5,
-    )
-    for query, ids, scores in zip(query_list, topk_index, topk_scores):
-        for idx, score in zip(ids, scores):
-            print(query, passage_list[idx], score, sep="  <---->  ")
+    # topk_index, topk_scores = find_topk_by_bm25(
+    #     query_list=query_list,    
+    #     passage_list=passage_list,
+    #     topk=5,
+    # )
+    # for query, ids, scores in zip(query_list, topk_index, topk_scores):
+    #     for idx, score in zip(ids, scores):
+    #         print(query, passage_list[idx], score, sep="  <---->  ")
     
     #################################### Single Embedding - Test Local###############################################
     # topk_index, topk_scores = find_topk_by_single_vecs(
@@ -534,6 +672,18 @@ if __name__ == "__main__":
     # for query, ids, scores in zip(query_list, topk_index, topk_scores):
     #     for idx, score in zip(ids, scores):
     #         print(query, passage_list[idx], score, sep="  <---->  ")
+    
+    #################################### Multi Embedding - Test Local###############################################
+    topk_index, topk_scores = find_topk_by_multi_vecs(
+        embedding_model_name_or_path="/data/zzy/models/BAAI/bge-m3",
+        model_type="local",
+        query_list=query_list,    
+        passage_list=passage_list,
+        topk=3,
+    )
+    for query, ids, scores in zip(query_list, topk_index, topk_scores):
+        for idx, score in zip(ids, scores):
+            print(query, passage_list[idx], score, sep="  <---->  ")
     
     #######################################  ReRanker - Test Local###################################################
     # topk_index, topk_scores = find_topk_by_reranker(

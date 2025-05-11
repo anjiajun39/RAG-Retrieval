@@ -1,5 +1,15 @@
 export HF_ENDPOINT="https://hf-mirror.com"
-export VOYAGE_KEY="pa-bbLh_hzI7rudMrTKpHQErxCiJHPZmiWzTkwztpKaD1S"
+export VOYAGE_KEY="xxx"
+export CUDA_VISIBLE_DEVICES=1
+
+# echo "run exp1 bm25"
+
+# python exp1_metric_of_different_answer_position.py\
+#     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
+#     --score_type bm25 \
+#     2>&1 >> run_exp1.log
+
+# echo "run exp1 single embedding"
 
 # python exp1_metric_of_different_answer_position.py \
 #     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2\
@@ -51,64 +61,65 @@ export VOYAGE_KEY="pa-bbLh_hzI7rudMrTKpHQErxCiJHPZmiWzTkwztpKaD1S"
 #     2>&1 >> run_exp1.log
 
 
-echo "run exp1 reranker"
+# echo "run exp1 multi embedding"
 
-python exp1_metric_of_different_answer_position.py\
-    --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
-    --model_name_or_path /data/zzy/models/BAAI/bge-reranker-v2-m3 \
-    --model_type local \
-    --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
-    --first_stage_model_type local \
-    --score_type reranker \
-    --reranker_sampling \
-    2>&1 >> run_exp1.log 
+# python exp1_metric_of_different_answer_position.py \
+#     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2\
+#     --model_name_or_path /data/zzy/models/BAAI/bge-m3 \
+#     --model_type local \
+#     --score_type multi_vec \
+#     --query_sampling \
+#     2>&1 >> run_exp1.log 
 
-python exp1_metric_of_different_answer_position.py\
-    --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
-    --model_name_or_path /data/zzy/models/Alibaba-NLP/gte-multilingual-reranker-base \
-    --model_type local \
-    --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
-    --first_stage_model_type local \
-    --score_type reranker \
-    --reranker_sampling \
-    2>&1 >> run_exp1.log 
 
-python exp1_metric_of_different_answer_position.py\
-    --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
-    --model_name_or_path /data/zzy/models/Alibaba-NLP/jinaai/jina-reranker-v2-base-multilingual \
-    --model_type local \
-    --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
-    --first_stage_model_type local \
-    --score_type reranker \
-    --reranker_sampling \
-    2>&1 >> run_exp1.log
+# echo "run exp1 reranker"
 
-python exp1_metric_of_different_answer_position.py\
-    --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
-    --model_name_or_path /data/zzy/models/Alibaba-NLP/maidalun1020/bce-reranker-base_v1 \
-    --model_type local \
-    --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
-    --first_stage_model_type local \
-    --score_type reranker \
-    --reranker_sampling \
-    2>&1 >> run_exp1.log 
+# python exp1_metric_of_different_answer_position.py\
+#     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
+#     --model_name_or_path /data/zzy/models/BAAI/bge-reranker-v2-m3 \
+#     --model_type local \
+#     --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
+#     --first_stage_model_type local \
+#     --score_type reranker \
+#     --query_sampling \
+#     2>&1 >> run_exp1.log 
 
-python exp1_metric_of_different_answer_position.py\
-    --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
-    --model_name_or_path rerank-2 \
-    --model_type api \
-    --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
-    --first_stage_model_type local \
-    --score_type reranker \
-    --reranker_sampling \
-    2>&1 >> run_exp1.log 
+# python exp1_metric_of_different_answer_position.py\
+#     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
+#     --model_name_or_path /data/zzy/models/Alibaba-NLP/gte-multilingual-reranker-base \
+#     --model_type local \
+#     --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
+#     --first_stage_model_type local \
+#     --score_type reranker \
+#     --query_sampling \
+#     2>&1 >> run_exp1.log 
 
-python exp1_metric_of_different_answer_position.py\
-    --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
-    --model_name_or_path /data/zzy/models/BAAl/bge-reranker-v2-gemma \
-    --model_type local \
-    --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
-    --first_stage_model_type local \
-    --score_type reranker \
-    --reranker_sampling \ 
-    2>&1 >> run_exp1.log 
+# python exp1_metric_of_different_answer_position.py\
+#     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
+#     --model_name_or_path /data/zzy/models/jinaai/jina-reranker-v2-base-multilingual \
+#     --model_type local \
+#     --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
+#     --first_stage_model_type local \
+#     --score_type reranker \
+#     --query_sampling \
+#     2>&1 >> run_exp1.log
+
+# python exp1_metric_of_different_answer_position.py\
+#     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
+#     --model_name_or_path rerank-2 \
+#     --model_type api \
+#     --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
+#     --first_stage_model_type local \
+#     --score_type reranker \
+#     --query_sampling \
+#     2>&1 >> run_exp1.log 
+
+# python exp1_metric_of_different_answer_position.py\
+#     --data_name_or_path /data/zzy/data/rajpurkar/squad_v2 \
+#     --model_name_or_path /data/zzy/models/BAAI/bge-reranker-v2-gemma \
+#     --model_type local \
+#     --first_stage_model_name_or_path /data/zzy/models/nvidia/NV-embed-v2 \
+#     --first_stage_model_type local \
+#     --score_type reranker \
+#     --query_sampling \
+#     2>&1 >> run_exp1.log
