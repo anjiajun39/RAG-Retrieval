@@ -117,7 +117,7 @@ if __name__ == "__main__":
     
     print("--------Evaluation--------")
     print(
-        f"model, #queries, min_answer_start, max_answer_start, {', '.join([f'Recall@{k}' for k in topk_list]), {', '.join([f'NDCG@{k}' for k in topk_list])}}"
+        f"model, #queries, min_answer_start, max_answer_start, {', '.join([f'Recall@{k}' for k in topk_list])}, {', '.join([f'NDCG@{k}' for k in topk_list])}"
     )
     # compute recall with different answer_start and top-k
     for min_len, max_len in [

@@ -388,7 +388,7 @@ def find_topk_by_reranker(
     # 加载rerank 模型 并获取rerank topk 结果 并进行相应的缓存操作
     rerank_topk_index, rerank_topk_scores = [], []
     if reranker_model_type == "local":
-        if "bge-reranker-v2-m3" in reranker_model_name_or_path or "bce-reranker-base_v1" in reranker_model_name_or_path:
+        if "bge-reranker-v2-m3" in reranker_model_name_or_path:
             reranker = FlagReranker(reranker_model_name_or_path, use_fp16=True)
             for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
                 scores = reranker.compute_score(
@@ -402,7 +402,7 @@ def find_topk_by_reranker(
             reranker = FlagLLMReranker(reranker_model_name_or_path, use_fp16=True)
             for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
                 scores = reranker.compute_score(
-                    [(query, passage_list[pid]) for pid in topk_passage_ids], normalize=True, max_length=8192, batch_size=16
+                    [(query, passage_list[pid]) for pid in topk_passage_ids], normalize=True, max_length=8192, batch_size=4
                 )
                 pid_scores = list(zip(topk_passage_ids, scores))
                 pid_scores.sort(key=lambda x: x[1], reverse=True)
@@ -413,7 +413,6 @@ def find_topk_by_reranker(
                 reranker_model_name_or_path,
                 automodel_args={"torch_dtype": "auto"},
                 trust_remote_code=True,
-                max_length=8192,
             )
             reranker.model.cuda().half()
             for query, topk_passage_ids in tqdm.tqdm(zip(query_list, topk_index), disable=False, desc=f"rerank..."):
