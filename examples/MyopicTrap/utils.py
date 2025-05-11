@@ -433,7 +433,64 @@ def find_topk_by_multi_vecs(
             sorted_results = sorted(result_heaps[qid], key=lambda x: (-x[0], x[1]))
             topk_index[qid] = [corpus_id for score, corpus_id in sorted_results][:topk]
             topk_scores[qid] = [score for score, corpus_id in sorted_results][:topk]
+    elif "jina-colbert-v2" in embedding_model_name_or_path:
+        #https://github.com/lightonai/pylate
+        from pylate import indexes, models, retrieve
+        model = models.ColBERT(
+            model_name_or_path=embedding_model_name_or_path,
+            query_prefix="[QueryMarker]",
+            document_prefix="[DocumentMarker]",
+            attend_to_expansion_tokens=True,
+            document_length=8196,
+            device="cuda",
+            trust_remote_code=True,
+        )
+        index = indexes.Voyager(
+            index_folder="pylate-jina",
+            index_name="jina-colbert-v2",
+            override=True,
+        )
+        retriever = retrieve.ColBERT(index=index)
         
+        query_ids = [i for i in range(len(query_list))]
+        passage_ids = [ i for i in range(len(passage_list))]
+
+        # Encode the documents
+        documents_embeddings = model.encode(
+            passage_list,
+            device="cuda",
+            batch_size=batch_size,
+            is_query=False, # Encoding documents
+            show_progress_bar=True,
+        )
+        index.add_documents(
+            documents_ids=passage_ids,
+            documents_embeddings=documents_embeddings,
+        )
+
+        queries_embeddings = model.encode(
+            query_list,
+            batch_size=batch_size,
+            device="cuda",
+            is_query=True, # Encoding queries
+            show_progress_bar=True,
+        )
+        # print(queries_embeddings)
+        scores = retriever.retrieve(
+            queries_embeddings=queries_embeddings,
+            k=topk,
+            device="cuda",
+        )
+
+        # 准备最终结果并排序
+        topk_index = np.zeros((len(query_ids), topk), dtype=int)
+        topk_scores = np.zeros((len(query_ids), topk), dtype=float)
+        
+        for qid in range(len(scores)):
+            # 从堆中获取并排序结果
+            score_lst= scores[qid]
+            topk_index[qid] = [dic_item['id'] for dic_item in score_lst][:topk]
+            topk_scores[qid] = [dic_item['score'] for dic_item in score_lst][:topk]
     else:
         raise Exception(f"Unsupported model: {embedding_model_name_or_path}")
         
