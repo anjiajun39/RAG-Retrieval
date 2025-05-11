@@ -56,8 +56,8 @@ if __name__ == "__main__":
     passage2id = {passage: idx for idx, passage in enumerate(passage_list)}
     
     
-    if args.score_type == "reranker" and args.reranker_sampling:
-        print("Sampling 1w query for Reranker due to efficiency")
+    if args.query_sampling:
+        print("Sampling 1w query due to efficiency")
         import random
         random.seed(42)
         random.shuffle(query_answer_span_list)
@@ -66,7 +66,7 @@ if __name__ == "__main__":
         after_query_answer_span_list = [[query, span] for query, span in query_answer_span_list if "after" in span][: 3300]
         query_answer_span_list = before_query_answer_span_list + middle_query_answer_span_list + after_query_answer_span_list
     else:
-        print("Using all queries for Reranker")
+        print("Using all queries!")
 
     query_list = [item[0] for item in query_answer_span_list]
     labels = np.array(
