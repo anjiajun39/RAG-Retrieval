@@ -28,7 +28,7 @@ RAG-Retrieval 提供了全链路的RAG检索模型微调(train)和推理(infer)�
 
 # 最新更新
 
-- 22/05/2025：RAG-Retrieval 发布 Myopic Trap，一项针对全流程信息检索（IR）链路中位置偏置的实证研究。我们在两个精心设计的位置感知型基准数据集（SQuAD-PosQ 和 FineWeb-PosQ）上，系统评估了多种 SOTA 检索模型，包括 BM25、稠密向量模型、ColBERT-style 模型以及重排序器（reranker）。[了解更多](./examples/MyopicTrap/)
+- 🔥 22/05/2025：RAG-Retrieval 发布 Myopic Trap，一项针对全流程信息检索（IR）链路中位置偏置的实证研究。我们在两个精心设计的位置感知型基准数据集（SQuAD-PosQ 和 FineWeb-PosQ）上，系统评估了多种 SOTA 检索模型，包括 BM25、稠密向量模型、ColBERT-style 模型以及重排序器（reranker）。[了解更多](./examples/MyopicTrap/)
 
 - 12/29/2024：RAG-Retrieval发布Stella and jasper embedidng model 的核心训练代码（stage3）[Jasper and Stella: distillation of SOTA embedding models](https://arxiv.org/abs/2412.19048).
 

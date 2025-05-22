@@ -30,7 +30,7 @@ The RAG-Retrieval offers end-to-end code for training, inference, and distillati
 
 # News
 
-- **22/05/2025**: RAG-Retrieval released Myopic Trap, an empirical study of positional bias across the full IR pipeline. We systematically evaluate a range of SOTA retrieval models—including BM25, dense embeddings, ColBERT-style models, and rerankers—on two carefully designed position-aware benchmarks: SQuAD-PosQ and FineWeb-PosQ. [Learn more](./examples/MyopicTrap/)
+- 🔥 **22/05/2025**: RAG-Retrieval released Myopic Trap, an empirical study of positional bias across the full IR pipeline. We systematically evaluate a range of SOTA retrieval models—including BM25, dense embeddings, ColBERT-style models, and rerankers—on two carefully designed position-aware benchmarks: SQuAD-PosQ and FineWeb-PosQ. [Learn more](./examples/MyopicTrap/)
 
 - **12/29/2024**: RAG-Retrieval released the core training code (stage3) of Stella and Jasper embedding model [Jasper and Stella: distillation of SOTA embedding models](https://arxiv.org/abs/2412.19048).
 
