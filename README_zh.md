@@ -30,18 +30,18 @@ RAG-Retrieval 提供了全链路的RAG检索模型微调(train)和推理(infer)�
 
 - 🔥 22/05/2025：RAG-Retrieval 发布 Myopic Trap，一项针对全流程信息检索（IR）链路中位置偏置的实证研究。我们在两个精心设计的位置感知型基准数据集（SQuAD-PosQ 和 FineWeb-PosQ）上，系统评估了多种 SOTA 检索模型，包括 BM25、稠密向量模型、ColBERT-style 模型以及重排序器（reranker）。[了解更多](./examples/MyopicTrap/)
 
-- 12/29/2024：RAG-Retrieval发布Stella and jasper embedidng model 的核心训练代码（stage3）[Jasper and Stella: distillation of SOTA embedding models](https://arxiv.org/abs/2412.19048).
+- 29/12/2024：RAG-Retrieval发布Stella and jasper embedidng model 的核心训练代码（stage3）[Jasper and Stella: distillation of SOTA embedding models](https://arxiv.org/abs/2412.19048).
 
-- 10/21/2024: RAG-Retrieval发布基于LLM做Reranker任务的两种不同方法，以及将其蒸馏到bert中的方法。[LLM在Reranker任务上的最佳实践？A simple experiment report（with code）](https://zhuanlan.zhihu.com/p/987727357)
+- 21/10/2024: RAG-Retrieval发布基于LLM做Reranker任务的两种不同方法，以及将其蒸馏到bert中的方法。[LLM在Reranker任务上的最佳实践？A simple experiment report（with code）](https://zhuanlan.zhihu.com/p/987727357)
 
 
-- 6/5/2024: RAG-Retrieval的Embedding模型的MRL loss实现。[RAG-Retrieval：让MRL loss成为训练向量(embedding)模型的标配](https://zhuanlan.zhihu.com/p/701884479)
+- 05/06/2024: RAG-Retrieval的Embedding模型的MRL loss实现。[RAG-Retrieval：让MRL loss成为训练向量(embedding)模型的标配](https://zhuanlan.zhihu.com/p/701884479)
 
-- 6/2/2024: RAG-Retrieval实现基于LLM偏好监督RAG检索器微调。[RAG-Retrieval实现基于LLM偏好监督RAG检索器微调](https://zhuanlan.zhihu.com/p/701215443)
+- 02/06/2024: RAG-Retrieval实现基于LLM偏好监督RAG检索器微调。[RAG-Retrieval实现基于LLM偏好监督RAG检索器微调](https://zhuanlan.zhihu.com/p/701215443)
 
-- 5/5/2024:发布RAG-Retrieval的轻量级的python库[RAG-Retrieval：你的RAG应用值得更好的排序推理框架](https://zhuanlan.zhihu.com/p/692404995)
+- 05/05/2024:发布RAG-Retrieval的轻量级的python库[RAG-Retrieval：你的RAG应用值得更好的排序推理框架](https://zhuanlan.zhihu.com/p/692404995)
 
-- 3/18/2024:发布RAG-Retrieval [RAG-Retrieval知乎介绍](https://zhuanlan.zhihu.com/p/683483778)
+- 18/03/2024:发布RAG-Retrieval [RAG-Retrieval知乎介绍](https://zhuanlan.zhihu.com/p/683483778)
 
 
 # 项目特色
