@@ -32,17 +32,17 @@ The RAG-Retrieval offers end-to-end code for training, inference, and distillati
 
 - 🔥 **22/05/2025**: RAG-Retrieval released Myopic Trap, an empirical study of positional bias across the full IR pipeline. We systematically evaluate a range of SOTA retrieval models—including BM25, dense embeddings, ColBERT-style models, and rerankers—on two carefully designed position-aware benchmarks: SQuAD-PosQ and FineWeb-PosQ. [Learn more](./examples/MyopicTrap/)
 
-- **12/29/2024**: RAG-Retrieval released the core training code (stage3) of Stella and Jasper embedding model [Jasper and Stella: distillation of SOTA embedding models](https://arxiv.org/abs/2412.19048).
+- **29/12/2024**: RAG-Retrieval released the core training code (stage3) of Stella and Jasper embedding model [Jasper and Stella: distillation of SOTA embedding models](https://arxiv.org/abs/2412.19048).
 
-- **10/21/2024**: RAG-Retrieval released two different methods for Reranker tasks based on LLM, as well as a method for distilling them into BERT. [Best Practices for LLM in Reranker Tasks? A Simple Experiment Report (with code)](https://zhuanlan.zhihu.com/p/987727357)
+- **21/10/2024**: RAG-Retrieval released two different methods for Reranker tasks based on LLM, as well as a method for distilling them into BERT. [Best Practices for LLM in Reranker Tasks? A Simple Experiment Report (with code)](https://zhuanlan.zhihu.com/p/987727357)
 
-- **6/5/2024**: Implementation of MRL loss for the Embedding model in RAG-Retrieval. [RAG-Retrieval: Making MRL Loss a Standard for Training Vector (Embedding) Models](https://zhuanlan.zhihu.com/p/701884479)
+- **05/06/2024**: Implementation of MRL loss for the Embedding model in RAG-Retrieval. [RAG-Retrieval: Making MRL Loss a Standard for Training Vector (Embedding) Models](https://zhuanlan.zhihu.com/p/701884479)
 
-- **6/2/2024**: RAG-Retrieval implements LLM preference-based supervised fine-tuning of the RAG retriever. [RAG-Retrieval Implements LLM Preference-Based Supervised Fine-Tuning of the RAG Retriever](https://zhuanlan.zhihu.com/p/701215443)
+- **02/06/2024**: RAG-Retrieval implements LLM preference-based supervised fine-tuning of the RAG retriever. [RAG-Retrieval Implements LLM Preference-Based Supervised Fine-Tuning of the RAG Retriever](https://zhuanlan.zhihu.com/p/701215443)
 
-- **5/5/2024**: Released a lightweight Python library for RAG-Retrieval. [RAG-Retrieval: Your RAG Application Deserves a Better Ranking Reasoning Framework](https://zhuanlan.zhihu.com/p/692404995)
+- **05/05/2024**: Released a lightweight Python library for RAG-Retrieval. [RAG-Retrieval: Your RAG Application Deserves a Better Ranking Reasoning Framework](https://zhuanlan.zhihu.com/p/692404995)
 
-- **3/18/2024**: Released RAG-Retrieval [Introduction to RAG-Retrieval on Zhihu](https://zhuanlan.zhihu.com/p/683483778)
+- **18/03/2024**: Released RAG-Retrieval [Introduction to RAG-Retrieval on Zhihu](https://zhuanlan.zhihu.com/p/683483778)
 
 
 
