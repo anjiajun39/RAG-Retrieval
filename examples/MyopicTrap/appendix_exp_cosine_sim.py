@@ -7,29 +7,26 @@ from datasets import load_dataset
 import random
 import tqdm
 from datatrove.pipeline.readers import ParquetReader
-import commercial_encoder_api
+import commercial_embedding_api
 
 if __name__ == "__main__":
     data_cache_dir = ""
     model_cache_dir = ""
     model_dir = ""
 
-    data_set_name = "squad_v2"  # squad_v2, fineweb_edu
+    data_set_name = "fineweb_edu"  # squad_v2, fineweb_edu
     all_models = [
-        # "jinaai/jina-embeddings-v2-base-en",
-        # "jinaai/jina-embeddings-v3",
-        # "BAAI/bge-m3",
-        # "NovaSearch/jasper_en_vision_language_v1",
-        # "nvidia/NV-Embed-v2",
-        # "Alibaba-NLP/gte-Qwen2-7B-instruct",
-        # "api_voyage",
-        # "api_openai"
-        "infgrad/very_awesome",
+        "BAAI/bge-m3",
+        "NovaSearch/stella_en_400M_v5",
+        "nvidia/NV-Embed-v2",
+        "Alibaba-NLP/gte-Qwen2-7B-instruct",
+        "api_voyage",
+        "api_openai"
     ]
 
     max_data = 10000
-    min_len, max_len = 100, 512 # squad_v2
-    # min_len, max_len = 200, 500  # fineweb_edu
+    # min_len, max_len = 100, 512 # squad_v2, max len of squad_v2 is ~120 words
+    min_len, max_len = 200, 500  # fineweb_edu
     batch_size = 12
 
     # load and process data
@@ -158,6 +155,7 @@ if __name__ == "__main__":
         elif (
             "bge-m3" in model_name_or_path
             or "jina-embeddings-v2-base-en" in model_name_or_path
+            or "stella_en_400M_v5" in model_name_or_path
         ):
             model.max_seq_length = 8192
             full_text_vecs = model.encode(
@@ -302,7 +300,7 @@ if __name__ == "__main__":
         elif "api" in model_name_or_path:
             model_name_or_path = model_name_or_path.split("_")[1]
             if model_name_or_path == "openai":
-                encoder = commercial_encoder_api.OpenAIEncoder()
+                encoder = commercial_embedding_api.OpenAIEncoder()
                 full_text_vecs = encoder.encode(
                     sentences=text_list,
                     normalize_embeddings=True,
@@ -320,7 +318,7 @@ if __name__ == "__main__":
                     normalize_embeddings=True,
                 )
             elif model_name_or_path == "cohere":
-                encoder = commercial_encoder_api.CohereEncoder()
+                encoder = commercial_embedding_api.CohereEncoder()
                 full_text_vecs = encoder.encode(
                     sentences=text_list,
                     normalize_embeddings=True,
@@ -342,7 +340,7 @@ if __name__ == "__main__":
                     prompt_name="search_document",
                 )
             elif model_name_or_path == "voyage":
-                encoder = commercial_encoder_api.VoyageEncoder()
+                encoder = commercial_embedding_api.VoyageEncoder()
                 full_text_vecs = encoder.encode(
                     sentences=text_list,
                     normalize_embeddings=True,
@@ -368,7 +366,7 @@ if __name__ == "__main__":
                     output_dimension=2048,
                 )
             elif model_name_or_path == "jina":
-                encoder = commercial_encoder_api.JinaEncoder()
+                encoder = commercial_embedding_api.JinaEncoder()
                 full_text_vecs = encoder.encode(
                     sentences=text_list,
                     normalize_embeddings=True,

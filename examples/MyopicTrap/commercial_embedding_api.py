@@ -22,7 +22,6 @@ class CommercialEncoder(ABC):
         raise NotImplementedError
 
     def _generate_cache_key(self, model_name: str, text: str, **kwargs):
-        """生成哈希值作为缓存键，确保相同输入得到相同缓存"""
         hash_input = model_name + "_" + text + "_" + str(kwargs)
         return hashlib.md5(hash_input.encode()).hexdigest()
 
