@@ -78,61 +78,44 @@ class EmbeddingDataset(Dataset):
         return self.train_data[idx]
 
     def triplet_collate_fn(self, batch):
-
         all_querys = []
         all_pos_docs = []
         all_neg_docs = []
-
         for item in batch:
             all_querys.append(item['query'])
             all_pos_docs.append(item['pos'])
             all_neg_docs.extend(item['neg'])
-
         all_query_tokens = self.tokenizer(all_querys, padding='max_length', truncation=True,
                                           max_length=self.query_max_len, return_tensors='pt')
-
         all_pos_doc_tokens = self.tokenizer(all_pos_docs, padding='max_length', truncation=True,
                                             max_length=self.passage_max_len, return_tensors='pt')
-
         all_neg_doc_tokens = self.tokenizer(all_neg_docs, padding='max_length', truncation=True,
                                             max_length=self.passage_max_len, return_tensors='pt')
-
         tokens_batch = {}
-
         tokens_batch['query_input_ids'] = all_query_tokens['input_ids']
         tokens_batch['query_attention_mask'] = all_query_tokens['attention_mask']
-
         tokens_batch['pos_doc_input_ids'] = all_pos_doc_tokens['input_ids']
         tokens_batch['pos_doc_attention_mask'] = all_pos_doc_tokens['attention_mask']
-
         tokens_batch['neg_doc_input_ids'] = all_neg_doc_tokens['input_ids']
         tokens_batch['neg_doc_attention_mask'] = all_neg_doc_tokens['attention_mask']
-
         return tokens_batch
 
     def pair_collate_fn(self, batch):
 
         all_querys = []
         all_pos_docs = []
-
         for item in batch:
             all_querys.append(item['query'])
             all_pos_docs.append(item['pos'])
-
         all_query_tokens = self.tokenizer(all_querys, padding='max_length', truncation=True,
                                           max_length=self.query_max_len, return_tensors='pt')
-
         all_pos_doc_tokens = self.tokenizer(all_pos_docs, padding='max_length', truncation=True,
                                             max_length=self.passage_max_len, return_tensors='pt')
-
         tokens_batch = {}
-
         tokens_batch['query_input_ids'] = all_query_tokens['input_ids']
         tokens_batch['query_attention_mask'] = all_query_tokens['attention_mask']
-
         tokens_batch['pos_doc_input_ids'] = all_pos_doc_tokens['input_ids']
         tokens_batch['pos_doc_attention_mask'] = all_pos_doc_tokens['attention_mask']
-
         return tokens_batch
 
     def pair_score_collate_fn(self, batch):
@@ -140,28 +123,20 @@ class EmbeddingDataset(Dataset):
         all_querys = []
         all_pos_docs = []
         scores = []
-
         for item in batch:
             all_querys.append(item['query'])
             all_pos_docs.append(item['pos'])
             scores.append(item['score'])
-
         all_query_tokens = self.tokenizer(all_querys, padding='max_length', truncation=True,
                                           max_length=self.query_max_len, return_tensors='pt')
-
         all_pos_doc_tokens = self.tokenizer(all_pos_docs, padding='max_length', truncation=True,
                                             max_length=self.passage_max_len, return_tensors='pt')
-
         tokens_batch = {}
-
         tokens_batch['query_input_ids'] = all_query_tokens['input_ids']
         tokens_batch['query_attention_mask'] = all_query_tokens['attention_mask']
-
         tokens_batch['pos_doc_input_ids'] = all_pos_doc_tokens['input_ids']
         tokens_batch['pos_doc_attention_mask'] = all_pos_doc_tokens['attention_mask']
-
         tokens_batch['scores'] = torch.tensor(scores)
-
         return tokens_batch
 
 class EmbeddingDistillDataset(Dataset):
@@ -212,7 +187,6 @@ class EmbeddingDistillDataset(Dataset):
 
         all_querys = []
         all_teacher_embeddings = []
-
         for item in batch:
             all_querys.append(item['query'])
             all_teacher_embeddings.append(item['embedding'])
@@ -222,7 +196,6 @@ class EmbeddingDistillDataset(Dataset):
         tokens_batch = {}
         tokens_batch['query_input_ids'] = all_query_tokens['input_ids']
         tokens_batch['query_attention_mask'] = all_query_tokens['attention_mask']
-
         tokens_batch['teacher_embeddings'] = all_teacher_embeddings
 
 
@@ -231,22 +204,15 @@ class EmbeddingDistillDataset(Dataset):
 
 def test_EmbeddingDataset():
     train_data_path = '../../../example_data/t2rank_100.jsonl'
-
     model_name_or_path = 'hfl/chinese-roberta-wwm-ext'
-
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-
     dataset = EmbeddingDataset(train_data_path, tokenizer, 15)
-
     print('using ', dataset.data_type)
-
     dataloader = DataLoader(dataset,
                             batch_size=32,
                             collate_fn=dataset.pair_collate_fn if dataset.data_type == 'pair' else dataset.triplet_collate_fn,
                             )
-
     print(len(dataloader))
-
     for batch in tqdm.tqdm(dataloader):
         print(batch['query_input_ids'].size())
         print(batch['pos_doc_attention_mask'].size())
@@ -256,30 +222,20 @@ def test_EmbeddingDataset():
 def test_EmbeddingDistillDataset():
     train_data_path = '../../../example_data/t2rank_100.jsonl.text.jsonl'
     train_dataset_vec_path="../../../example_data/t2rank_100.embedding.conan.xiaobu.mmap"
-
-
-
     model_name_or_path = 'BAAI/bge-base-zh-v1.5'
-
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-
     dataset = EmbeddingDistillDataset(train_data_path,train_dataset_vec_path, tokenizer,teatch_emebedding_dim=1792*2)
-
-
     dataloader = DataLoader(dataset,
                             batch_size=512,
                             shuffle=False,
                             collate_fn=dataset.collate_fn,
                             )
-
     print(len(dataloader))
-
     for batch in tqdm.tqdm(dataloader):
         print(batch['query_input_ids'])
         print(tokenizer.decode(batch['query_input_ids'][0]))
         print(batch['teacher_embeddings'])
         break
-
 
 if __name__ == "__main__":
     test_EmbeddingDistillDataset()
