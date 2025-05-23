@@ -48,12 +48,12 @@ The RAG-Retrieval offers end-to-end code for training, inference, and distillati
 
 # Features
 
+- **Simple yet Elegant**: Rejects complex, with a simple and understandable code structure for easy modifications.
 - **Supports end-to-end fine-tuning of RAG retrieval models**: Embedding (bert-based, llm-based), late interaction models (colbert), and reranker models (bert-based, llm-based).
 - **Supports fine-tuning of any open-source RAG retrieval models**: Compatible with most open-source embedding and reranker models, such as: bge (bge-embedding, bge-m3, bge-reranker), bce (bce-embedding, bce-reranker), gte (gte-embedding, gte-multilingual-reranker-base).
-- **Supports distillation of llm-based large models to bert-based smaller models**: Currently supports the distillation of llm-based reranker models into bert-based reranker models (implementation of mean squared error and cross-entropy loss).
-- **Advanced Algorithms**: For embedding models, supports the [MRL algorithm](https://arxiv.org/abs/2205.13147) to reduce the dimensionality of output vectors.
+- **Supports distillation of larger models into smaller models**: Enables the distillation of larger LLM-based reranker or embedding models into smaller ones (e.g., a 0.5B-parameter LLM or BERT-base).
+- **Advanced Algorithms**: For embedding models, supports the [MRL algorithm](https://arxiv.org/abs/2205.13147) to reduce the dimensionality of output vectors and [Stella distillation method](https://arxiv.org/abs/2412.19048).
 - **Multi-gpu training strategy**: Includes deepspeed, fsdp.
-- **Simple yet Elegant**: Rejects complex, with a simple and understandable code structure for easy modifications.
 
 
 # Quick Start
@@ -146,6 +146,16 @@ If you find this repository helpful, please cite our work:
       url={https://arxiv.org/abs/2412.19048}, 
 }
 ```
+
+# Acknowledge
+
+During the development process, we borrowed or based on the implementation of the following projects. We sincerely appreciate the efforts of these teams for their contributions to open-source research and development.
+
+- [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding)
+- [uniem](https://github.com/wangyuxinwhy/uniem)
+- [sentence-transformers](https://github.com/UKPLab/sentence-transformers)
+- [rerankers](https://github.com/AnswerDotAI/rerankers)
+
 
 # Star History
 
