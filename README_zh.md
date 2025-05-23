@@ -46,12 +46,12 @@ RAG-Retrieval 提供了全链路的RAG检索模型微调(train)和推理(infer)�
 
 # 项目特色
 
-- **支持全链路的RAG检索模型微调**: 向量(bert-based,llm-based),迟交互模型(colbert),重排序模型(bert-based,llm-based)
+- **简单且优雅**: 拒绝复杂的封装，简单易懂的代码结构，方便修改。
+- **支持全链路的RAG检索模型微调**: 向量(bert-based,llm-based),迟交互模型(colbert),重排序模型(bert-based,llm-based)。
 - **支持微调任意开源的RAG检索模型**: 支持大部分开源的embedding和reranker模型，例如：bge(bge-embedding,bge-m3,bge-reranker),bce(bce-embedding,bce-reranker),gte(gte-embedding,gte-multilingual-reranker-base)。
-- **支持蒸馏llm-based大模型到bert-based小模型**: 目前已经支持llm-based reranker模型蒸馏到bert-based reranker模型。(均方差和交叉熵loss实现)
-- **先进算法**: 对于embedding模型，支持[MRL算法](https://arxiv.org/abs/2205.13147)，来缩减输出向量的维度。
-- **多卡训练策略**: deepspeed,fsdp.
-- **简单且优雅**: 拒绝复杂的封装，简单易懂的代码结构，方便魔改。
+- **支持将较大的检索模型蒸馏为较小的模型**: 支持将较大的基于LLM的 reranker 和 embedding 模型蒸馏到较小的检索模型中（例如，0.5B LLM 或 BERT）。
+- **先进算法**: 对于embedding模型，支持[MRL算法](https://arxiv.org/abs/2205.13147)来缩减输出向量的维度，支持[Stella 模型](https://arxiv.org/abs/2412.19048)先进的蒸馏方法。
+- **多卡训练策略**: deepspeed,fsdp。
 
 # 快速开始
 
@@ -128,6 +128,14 @@ RAG-Retrieval开发了一个轻量级的python库[rag-retrieval](https://pypi.or
 后面带有finetune的代表我们使用RAG-Retrieval在对应开源模型的基础上继续微调所得，训练数据使用T2-Reranking的训练集。
 
 值得注意的是bge的三种开源模型，训练集中已经包含了T2-Reranking，并且该数据较为通用，因此使用该数据继续微调的性能提升效果不大，但是如果使用垂直领域的数据集继续微调开源模型，性能提升会更大。
+
+# Acknowledge
+在开发过程中，我们借鉴或基于以下项目，衷心感谢这些团队为开源做出的贡献。
+
+- [FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding)
+- [uniem](https://github.com/wangyuxinwhy/uniem)
+- [sentence-transformers](https://github.com/UKPLab/sentence-transformers)
+- [rerankers](https://github.com/AnswerDotAI/rerankers)
 
 # Star History
 
