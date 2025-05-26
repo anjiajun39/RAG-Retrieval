@@ -40,7 +40,7 @@ The RAG-Retrieval offers end-to-end code for training, inference, and distillati
 
 - **02/06/2024**: RAG-Retrieval implements LLM preference-based supervised fine-tuning of the RAG retriever. [RAG-Retrieval Implements LLM Preference-Based Supervised Fine-Tuning of the RAG Retriever](https://zhuanlan.zhihu.com/p/701215443)
 
-- **05/05/2024**: Released a lightweight Python library for RAG-Retrieval. [RAG-Retrieval: Your RAG Application Deserves a Better Ranking Reasoning Framework](https://zhuanlan.zhihu.com/p/692404995)
+- **05/05/2024**: Released a lightweight Python library for RAG-Retrieval. [RAG-Retrieval: Your RAG Application Deserves a better infer framework](https://zhuanlan.zhihu.com/p/692404995)
 
 - **18/03/2024**: Released RAG-Retrieval [Introduction to RAG-Retrieval on Zhihu](https://zhuanlan.zhihu.com/p/683483778)
 
