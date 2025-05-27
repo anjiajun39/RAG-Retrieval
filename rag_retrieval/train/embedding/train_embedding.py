@@ -159,7 +159,7 @@ def main():
 
     num_workers = 0
     train_dataloader = DataLoader(
-        train_dataset,
+        train_datast,
         batch_size=args.batch_size,
         collate_fn=train_datast.collate_fn,
         shuffle=args.shuffle,
