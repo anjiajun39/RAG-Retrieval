@@ -72,51 +72,70 @@ class Embedding(nn.Module):
                     loss = torch.tensor(0.0, device=query_embeddings.device)
                     accuracy = 0.0
                     for num_dim in self.mrl_dims:
-                        cur_query_emb = F.normalize(query_embeddings[..., :num_dim], p=2, dim=-1)
-                        cur_doc_emb = F.normalize(pos_doc_embeddings[..., :num_dim], p=2, dim=-1)
-                        pos_sim = torch.sum(cur_query_emb * cur_doc_emb, dim=-1, keepdim=True) 
-                        cur_all_doc_emb = F.normalize(all_doc_emb[..., :num_dim], p=2, dim=-1)
-                        all_neg_sim = cur_query_emb @ cur_all_doc_emb.T  # [B, B_total] 
-                        neg_sim_filtered = all_neg_sim.masked_select(neg_mask).view(B, -1)  # [B, B_total - 1]
-                        logits = torch.cat([pos_sim, neg_sim_filtered], dim=1)  # [B, 1 + B_total - 1]
-                        labels = torch.zeros(B, dtype=torch.long, device=query_embeddings.device)
-                        loss += F.cross_entropy(logits / self.temperature, labels)
+                        cur_query_emb = F.normalize(
+                            query_embeddings[..., :num_dim], p=2, dim=-1)
+                        cur_doc_emb = F.normalize(
+                            pos_doc_embeddings[..., :num_dim], p=2, dim=-1)
+                        pos_sim = torch.sum(
+                            cur_query_emb * cur_doc_emb, dim=-1, keepdim=True)
+                        cur_all_doc_emb = F.normalize(
+                            all_doc_emb[..., :num_dim], p=2, dim=-1)
+                        # [B, B_total]
+                        all_neg_sim = cur_query_emb @ cur_all_doc_emb.T
+                        neg_sim_filtered = all_neg_sim.masked_select(
+                            neg_mask).view(B, -1)  # [B, B_total - 1]
+                        # [B, 1 + B_total - 1]
+                        logits = torch.cat([pos_sim, neg_sim_filtered], dim=1)
+                        labels = torch.zeros(
+                            B, dtype=torch.long, device=query_embeddings.device)
+                        loss += F.cross_entropy(logits /
+                                                self.temperature, labels)
                         _, predicted = torch.max(logits, 1)
                         correct = (predicted == labels).sum().item()
-                        accuracy += correct / labels.size(0)
+                        res_dict['accuracy_dim_{}'.format(num_dim)] = correct / labels.size(0)
                     loss = loss / len(self.mrl_dims)
-                    accuracy = accuracy / len(self.mrl_dims)
                 else:
-                    query_embeddings = F.normalize(query_embeddings, p=2, dim=-1)
-                    pos_doc_embeddings = F.normalize(pos_doc_embeddings, p=2, dim=-1)
-                    pos_sim = torch.sum(query_embeddings * pos_doc_embeddings, dim=-1, keepdim=True)
+                    query_embeddings = F.normalize(
+                        query_embeddings, p=2, dim=-1)
+                    pos_doc_embeddings = F.normalize(
+                        pos_doc_embeddings, p=2, dim=-1)
+                    pos_sim = torch.sum(
+                        query_embeddings * pos_doc_embeddings, dim=-1, keepdim=True)
                     all_doc_emb = F.normalize(all_doc_emb, p=2, dim=-1)
-                    all_neg_sim = query_embeddings @ all_doc_emb.T  # [B, B_total]
-                    neg_sim_filtered = all_neg_sim.masked_select(neg_mask).view(B, -1)  # [B, B_total - 1]
-                    logits = torch.cat([pos_sim, neg_sim_filtered], dim=1)  # [B, 1 + B_total - 1]
-                    labels = torch.zeros(B, dtype=torch.long, device=query_embeddings.device)
-                    
+                    # [B, B_total]
+                    all_neg_sim = query_embeddings @ all_doc_emb.T
+                    neg_sim_filtered = all_neg_sim.masked_select(
+                        neg_mask).view(B, -1)  # [B, B_total - 1]
+                    # [B, 1 + B_total - 1]
+                    logits = torch.cat([pos_sim, neg_sim_filtered], dim=1)
+                    labels = torch.zeros(
+                        B, dtype=torch.long, device=query_embeddings.device)
+
                     loss = F.cross_entropy(logits / self.temperature, labels)
                     _, predicted = torch.max(logits, 1)
-                    accuracy = (predicted == labels).sum().item() / labels.size(0)
-
+                    accuracy = (predicted == labels).sum(
+                    ).item() / labels.size(0)
+                    res_dict['accuracy'] = accuracy
                 res_dict['loss'] = loss
-                res_dict['accuracy'] = accuracy
             
             else:
                 if self.use_mrl:
                     loss = torch.tensor(0.0, device=query_embeddings.device)
                     accuracy = 0.0
                     for num_dim in self.mrl_dims:
-                        query_emb, pos_doc_emb = query_embeddings[..., :num_dim], pos_doc_embeddings[..., :num_dim]
-                        cur_loss, cur_accuracy = self.pair_inbatch_softmax_loss(query_emb, pos_doc_emb, require_acc=True)
+                        query_emb, pos_doc_emb = query_embeddings[...,
+                                                                :num_dim], pos_doc_embeddings[..., :num_dim]
+                        cur_loss, cur_accuracy = self.pair_inbatch_softmax_loss(
+                            query_emb, pos_doc_emb, require_acc=True)
                         loss += cur_loss
-                        accuracy += cur_accuracy
+                        res_dict['accuracy_dim_{}'.format(num_dim)] = cur_accuracy
                     loss = loss / len(self.mrl_dims)
                     accuracy = accuracy / len(self.mrl_dims)
                 else:
-                    loss, accuracy = self.pair_inbatch_softmax_loss(query_embeddings, pos_doc_embeddings, require_acc=True)
-                res_dict['loss'], res_dict['accuracy'] = loss, accuracy
+                    loss, accuracy = self.pair_inbatch_softmax_loss(
+                        query_embeddings, pos_doc_embeddings, require_acc=True)
+                    res_dict['accuracy'] = accuracy
+                res_dict['loss'] = loss
 
         # both pos and neg triplet loss
         elif pos_doc_input_ids is not None and neg_doc_input_ids is not None:
@@ -128,11 +147,16 @@ class Embedding(nn.Module):
                 loss = torch.tensor(0.0, device=query_embeddings.device)
                 for num_dim in self.mrl_dims:
                     query_emb, pos_doc_emb, neg_doc_emb = query_embeddings[..., :num_dim], pos_doc_embeddings[..., :num_dim], neg_doc_embeddings[...,
-                                                                                                                              :num_dim]
-                    loss += self.triplet_inbatch_softmax_loss(query_emb, pos_doc_emb, neg_doc_emb)
+                                                                                                                                                :num_dim]
+                    cur_loss, cur_accuracy = self.triplet_inbatch_softmax_loss(
+                        query_emb, pos_doc_emb, neg_doc_emb, require_acc=True)
+                    loss += cur_loss
+                    res_dict['accuracy_dim_{}'.format(num_dim)] = cur_accuracy
                 loss = loss / len(self.mrl_dims)
             else:
-                loss = self.triplet_inbatch_softmax_loss(query_embeddings, pos_doc_embeddings, neg_doc_embeddings)
+                loss, accuracy = self.triplet_inbatch_softmax_loss(
+                    query_embeddings, pos_doc_embeddings, neg_doc_embeddings, require_acc=True)
+                res_dict['accuracy'] = accuracy
             res_dict['loss'] = loss
 
         elif pos_doc_input_ids is not None and scores is not None:
@@ -185,6 +209,7 @@ class Embedding(nn.Module):
         query_embeddings,  # [batch_size,dim]
         pos_doc_embeddings,  # [batch_size,dim]
         neg_doc_embeddings,  # [batch_size*neg_nums,dim]
+        require_acc=False
     ):
         loss_fct = nn.CrossEntropyLoss()
 
@@ -194,20 +219,28 @@ class Embedding(nn.Module):
         neg_doc_embeddings = F.normalize(neg_doc_embeddings, p=2, dim=-1)
 
         # [batch_size] <- [batch_size,dim],[batch_size,dim]
-        pos_sim_matrix = torch.sum(query_embeddings * pos_doc_embeddings, dim=-1)
+        pos_sim_matrix = torch.sum(
+            query_embeddings * pos_doc_embeddings, dim=-1)
 
         # [batch_size,1,batch_size*neg_nums] <- [batch_size,1,dim],[1,batch_size*neg_nums,dim]
-        neg_sim_matrix = query_embeddings.unsqueeze(1) @ neg_doc_embeddings.unsqueeze(0).transpose(-1, -2)
+        neg_sim_matrix = query_embeddings.unsqueeze(
+            1) @ neg_doc_embeddings.unsqueeze(0).transpose(-1, -2)
 
         # [batch_size,batch_size*neg_nums]
         neg_sim_matrix = neg_sim_matrix.squeeze(1)
-        labels = torch.zeros(query_embeddings.shape[0], dtype=torch.long, device=query_embeddings.device)
+        labels = torch.zeros(
+            query_embeddings.shape[0], dtype=torch.long, device=query_embeddings.device)
 
         # [batch_size,1+batch_size*neg_nums]
-        pos_neg_score = torch.cat([pos_sim_matrix.unsqueeze(1), neg_sim_matrix], dim=1) / self.temperature
+        pos_neg_score = torch.cat([pos_sim_matrix.unsqueeze(
+            1), neg_sim_matrix], dim=1) / self.temperature
 
         loss = loss_fct(pos_neg_score, labels)
-
+        if require_acc:
+            _, predicted = torch.max(pos_neg_score, 1)
+            correct = (predicted == labels).sum().item()
+            accuracy = correct / labels.size(0)
+            return loss, accuracy
         return loss
 
     def pair_kl_loss(
