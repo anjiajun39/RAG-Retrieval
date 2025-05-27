@@ -136,7 +136,7 @@ def main():
             passage_max_len=args.passage_max_len,
         )
         if args.val_dataset:
-            val_dataset = EmbeddingDataset(
+            val_datast = EmbeddingDataset(
                 train_data_path=args.val_dataset,
                 tokenizer=tokenizer,
                 neg_nums=args.neg_nums,
@@ -159,7 +159,7 @@ def main():
 
     num_workers = 0
     train_dataloader = DataLoader(
-        train_datast,
+        train_dataset,
         batch_size=args.batch_size,
         collate_fn=train_datast.collate_fn,
         shuffle=args.shuffle,
@@ -171,7 +171,7 @@ def main():
         val_dataloader = DataLoader(
             val_datast,
             batch_size=args.batch_size,
-            collate_fn=train_datast.collate_fn,
+            collate_fn=val_datast.collate_fn,
             shuffle=args.shuffle,
             num_workers=num_workers,
             pin_memory=True,
