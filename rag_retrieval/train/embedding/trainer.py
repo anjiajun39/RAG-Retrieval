@@ -114,8 +114,7 @@ class Trainer:
                         save_dir=self.get_checkpoint_dir(self.current_step, is_step=True)  # TODO: 改为按照step保存
                         unwrapped_model = self.accelerator.unwrap_model(self.model)
                         unwrapped_model.save_pretrained(save_dir,
-                                                        safe_serialization=True,
-                                                        accelerator=self.accelerator)
+                                                        safe_serialization=False)
                         # self.accelerator.save_model(self.model, save_dir)
                         self.tokenizer.save_pretrained(save_dir)
                         # self.accelerator.save_model(self.model, save_dir)
