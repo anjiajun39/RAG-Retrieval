@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument('--neg_nums', type=int, default=15)
     parser.add_argument('--query_max_len', type=int, default=128)
     parser.add_argument('--passage_max_len', type=int, default=512)
-    parser.add_argument('--teatch_emebedding_dim', type=int)
+    parser.add_argument('--teacher_emebedding_dim', type=int)
 
     parser.add_argument('--output_dir', help='output dir')
     parser.add_argument('--save_on_epoch_end', type=int, default=1, help='if save_on_epoch_end')
@@ -147,14 +147,14 @@ def main():
         model = DistillEmbedding.from_pretrained(
             model_name_or_path=args.model_name_or_path,
             mrl_dims=mrl_dims,
-            teatch_emebedding_dim=args.teatch_emebedding_dim
+            teacher_emebedding_dim=args.teacher_emebedding_dim
         )
         train_datast = EmbeddingDistillDataset(
             train_data_path=args.train_dataset,
             train_dataset_vec_path=args.train_dataset_vec,
             tokenizer=tokenizer,
             query_max_len=args.query_max_len,
-            teatch_emebedding_dim=args.teatch_emebedding_dim
+            teacher_emebedding_dim=args.teacher_emebedding_dim
         )
 
     num_workers = 0
