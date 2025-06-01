@@ -376,7 +376,7 @@ class Embedding(nn.Module):
                 sentence_model._modules[str(idx)] = scaling_layer
             print(sentence_model)
 
-        embedding = cls(sentence_model, tokenizer, use_mrl, mrl_dims, temperature)
+        embedding = cls(sentence_model, tokenizer, use_mrl, mrl_dims, temperature, all_gather)
 
         return embedding
 
