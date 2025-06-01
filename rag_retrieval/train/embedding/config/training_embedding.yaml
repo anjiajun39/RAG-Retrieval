@@ -26,7 +26,7 @@ batch_size: 32
 seed: 666
 warmup_proportion: 0.1
 gradient_accumulation_steps: 3
-mixed_precision: fp16
+mixed_precision: bf16
 
 ##mrl
 use_mrl: false
