@@ -26,6 +26,7 @@ seed: 666
 warmup_proportion: 0.05
 gradient_accumulation_steps: 1
 mixed_precision: bf16
+gradient_checkpointing: True
 
 ##mrl
 use_mrl: true
