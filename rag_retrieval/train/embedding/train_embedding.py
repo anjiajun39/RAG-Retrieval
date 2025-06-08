@@ -69,6 +69,8 @@ def parse_args():
     parser.add_argument("--temperature", type=float, default=0.02)
     parser.add_argument('--mixed_precision', default='fp16', help='')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1)
+    parser.add_argument('--gradient_checkpointing', action='store_true', help='if use gradient_checkpointing')
+    parser.add_argument('--all_gather', action='store_true', help='if use all_gather')
 
     parser.add_argument("--log_with", type=str, default='wandb', help='wandb,tensorboard')
     parser.add_argument("--log_interval", type=int, default=10)
@@ -77,7 +79,6 @@ def parse_args():
 
     parser.add_argument('--use_mrl', action='store_true', help='if use mrl loss')
     parser.add_argument('--mrl_dims', type=str, help='list of mrl dims', default='128, 256, 512, 768, 1024, 1280, 1536, 1792')
-    parser.add_argument('--all_gather', action='store_true', help='if use all_gather')
 
     args = parser.parse_args()
 
@@ -157,13 +158,14 @@ def main():
             teacher_emebedding_dim=args.teacher_emebedding_dim
         )
 
-    num_workers = 0
+    if args.gradient_checkpointing:
+        model.model.gradient_checkpointing_enable()
     train_dataloader = DataLoader(
         train_datast,
         batch_size=args.batch_size,
         collate_fn=train_datast.collate_fn,
         shuffle=args.shuffle,
-        num_workers=num_workers,
+        num_workers=8,
         pin_memory=True,
     )
     val_dataloader = None
