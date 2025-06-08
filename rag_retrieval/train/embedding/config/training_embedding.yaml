@@ -5,7 +5,7 @@ train_type: "train"
 
 # Dataset
 train_dataset: "../../../example_data/t2rank_100.jsonl"
-neg_nums: 15
+neg_nums: 5
 query_max_len: 128
 passage_max_len: 512
 shuffle: true
@@ -22,11 +22,13 @@ num_max_checkpoints: 5
 temperature: 0.02
 epochs: 2
 lr: 2e-5
-batch_size: 32
+batch_size: 8
 seed: 666
 warmup_proportion: 0.1
 gradient_accumulation_steps: 3
 mixed_precision: bf16
+all_gather: True
+gradient_checkpointing: True
 
 ##mrl
 use_mrl: false
