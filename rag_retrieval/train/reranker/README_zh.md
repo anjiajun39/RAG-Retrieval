@@ -6,14 +6,7 @@ conda create -n rag-retrieval python=3.8 && conda activate rag-retrieval
 #为了避免自动安装的torch与本地的cuda不兼容，建议进行下一步之前先手动安装本地cuda版本兼容的torch。
 pip install -r requirements.txt 
 ```
-
-| Requirement | Recommend |
-| ---------------| ---------------- |
-| accelerate    |             1.0.1 |
-|deepspeed |0.15.4|
-|transformers |4.44.2|          
-
-
+    
                
 
 # 微调模型
