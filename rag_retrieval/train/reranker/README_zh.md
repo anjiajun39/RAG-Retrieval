@@ -32,7 +32,7 @@ pip install -r requirements.txt
 > 当相关性是多级标签时，通过设定 `max_label` 和 `min_label` ，数据集内部会自动将多级标签均匀放缩到 0-1 分数区间中。
 > 例如数据集中存在三级标签（0，1，2），经过放缩后，得到：{ label 0: 0，label 1: 0.5，label 2: 1 }。
 
-支持两种损失函数：二分类交叉熵损失（Binary Cross Entropy, BCE）（二分类场景和soft label下均可）和均方误差损失（MSE）。
+支持两种损失函数：二分类交叉熵损失（BCE）（二分类场景和soft label下的交叉熵loss均可）和均方误差损失（MSE）。
 
 
 ### 分组数据加载
