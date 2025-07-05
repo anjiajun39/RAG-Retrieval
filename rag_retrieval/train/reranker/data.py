@@ -219,7 +219,7 @@ def test_GroupedRankerDataset():
         special_token="\nrelevance"
     )
     print("Testing GroupedRankerDataset ...")
-    dataset = GroupedRankerDataset(data_path=data_path, label_key="listwise_score",
+    dataset = GroupedRankerDataset(data_path=data_path, label_key="label",
                                    target_model=reranker, max_len=512, train_group_size=10)
 
     dataloader = DataLoader(dataset, batch_size=10,
